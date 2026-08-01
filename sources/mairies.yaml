@@ -1,0 +1,107 @@
+# Sources municipales vérifiées (recensement 2026-08-01) — lues par la tâche hebdo.
+# priorite: 1 = brancher d'abord (rendement), 2 = complément, 3 = appoint faible rendement.
+# mode: rss = flux exploitable directement ; html = extraction sur la page ; rss-js = RSS ok mais pages JS.
+
+- nom: Mairie de Montrichard Val de Cher
+  commune: Montrichard Val de Cher
+  url: https://www.montrichardvaldecher.com/agenda/liste/
+  rss: https://www.montrichardvaldecher.com/agenda/feed/
+  ical: https://www.montrichardvaldecher.com/agenda/liste/?ical=1
+  type: mairie
+  mode: rss
+  priorite: 1
+  remarque: Meilleure source du secteur (The Events Calendar). Brocantes, ciné plein air, bal des pompiers.
+
+- nom: Mairie de Faverolles-sur-Cher
+  commune: Faverolles-sur-Cher
+  url: https://www.faverollessurcher.fr/fr/ev/2439153/agenda-1581
+  type: mairie
+  mode: html
+  priorite: 1
+  remarque: Plateforme Localiti, URLs stables. Brocante du Comité des Fêtes confirmée. Volume faible mais ciblé.
+
+- nom: Mairie de Thésée
+  commune: Thésée
+  url: https://www.communedethesee.com/
+  type: mairie
+  mode: html
+  priorite: 1
+  remarque: Jimdo, événements sur la home (pas de page agenda). Concours de pêche, théâtre, ciné plein air.
+
+- nom: Mairie de Pouillé
+  commune: Pouillé
+  url: https://mairie-pouille-loiretcher.fr/agenda/
+  type: mairie
+  mode: html
+  priorite: 1
+  remarque: WordPress, rythme mensuel. Concerts, concours de pêche, ciné plein air.
+
+- nom: Mairie de Bléré
+  commune: Bléré
+  url: https://www.ville-blere.fr/sortir-a-blere/agenda/
+  type: mairie
+  mode: html
+  priorite: 2
+  remarque: Agenda IntraMuros filtrable par mois. Plutôt programmation culturelle que brocantes.
+
+- nom: Mairie de Saint-Julien-de-Chédon
+  commune: Saint-Julien-de-Chédon
+  url: https://www.chedonais.fr/toute-lactualite-de-st-julien-de-chedon
+  type: mairie
+  mode: html
+  priorite: 2
+  remarque: Joomla, 1-2 posts/mois.
+
+- nom: CC Val de Cher Controis
+  commune: interco
+  url: https://www.val2c.fr/lintercommunalite/actualites/
+  rss: https://www.val2c.fr/feed/
+  type: interco
+  mode: rss
+  priorite: 2
+  remarque: Festivals interco (Vents d'été, Raconte-moi). Pas de fêtes de village.
+
+- nom: CC Autour de Chenonceaux Bléré-Val de Cher
+  commune: interco
+  url: https://www.cc-autourdechenonceaux.fr/actualites/
+  rss: https://www.cc-autourdechenonceaux.fr/feed/
+  type: interco
+  mode: rss
+  priorite: 2
+  remarque: Festival Jour de Cher etc. NE PAS scraper /events/ (archive morte 2022), flux principal seulement.
+
+- nom: Mairie de Céré-la-Ronde
+  commune: Céré-la-Ronde
+  url: https://www.cere-la-ronde.fr/feed/
+  rss: https://www.cere-la-ronde.fr/feed/
+  type: mairie
+  mode: rss-js
+  priorite: 3
+  remarque: Pages agenda en JS (vides au fetch) — passer par le RSS. Rythme lent.
+
+- nom: Mairie de Chenonceaux
+  commune: Chenonceaux
+  url: https://www.chenonceaux.fr/actualites.html
+  type: mairie
+  mode: html
+  priorite: 3
+  remarque: Majoritairement administratif (don du sang). Appoint.
+
+- nom: Mairie de Monthou-sur-Cher
+  commune: Monthou-sur-Cher
+  url: https://monthousurcher.fr/
+  type: mairie
+  mode: html
+  priorite: 3
+  remarque: Événements sur la home + agenda PDF saisonnier. Renvoie vers Facebook et PanneauPocket.
+
+# --- Pistes non branchées ---
+# OT Autour de Chenonceaux (https://autourdechenonceaux.fr/agenda/) : agenda rendu côté client,
+#   filtres "Brocante et vide-greniers" — identifier l'API sous-jacente (Apidae/Tourinsoft) via
+#   l'onglet réseau d'un navigateur. Priorité d'investigation n°1.
+# PanneauPocket (app.panneaupocket.com) : LE canal commun du secteur, y compris Saint-Georges-sur-Cher
+#   (dont le site est mort : agenda vide, actus 404). App JS — nécessite navigateur. Priorité n°2.
+# Pontlevoy & Chisseaux : sites actifs mais certificat TLS invalide — récupérables avec verify désactivé
+#   (décision à prendre : accepter le risque TLS pour deux mairies ou attendre qu'elles réparent).
+# Sans source : Angé (site périmé 2024), Chissay (HTTP 500), Vallières-les-Grandes (IntraMuros only),
+#   Civray-de-Touraine (agenda figé 2025).

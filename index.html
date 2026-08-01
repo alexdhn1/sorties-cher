@@ -2,65 +2,101 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191512" media="(prefers-color-scheme: dark)">
+<link rel="preload" as="fetch" href="data.json" crossorigin>
 <title>Sorties — vallée du Cher</title>
 <style>
   :root {
-    --bg: #faf7f2; --card: #ffffff; --ink: #2b2620; --muted: #8a7f6f;
-    --accent: #9a5b2d; --accent-soft: #f3e5d8; --chip: #efe9df; --chip-on: #2b2620;
+    color-scheme: light dark;
+    --bg: #faf7f2; --card: #ffffff; --ink: #2b2620; --muted: #7a6f60;
+    --accent: #8a4f24; --accent-soft: #f3e5d8; --chip: #efe9df; --chip-on: #2b2620;
+    --line: rgba(43,38,32,.08);
     --shadow: 0 1px 3px rgba(43,38,32,.08), 0 4px 14px rgba(43,38,32,.06);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #191512; --card: #241f1a; --ink: #ede6da; --muted: #9c9081;
       --accent: #d99a5b; --accent-soft: #3a2d20; --chip: #322b23; --chip-on: #ede6da;
+      --line: rgba(237,230,218,.10);
       --shadow: 0 1px 3px rgba(0,0,0,.4);
     }
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 16px 14px 60px; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior-y: none; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 16px 14px calc(60px + env(safe-area-inset-bottom)); overflow-anchor: auto; }
   header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-  header h1 { font-size: 1.3rem; letter-spacing: -.01em; }
+  header h1 { font-size: 1.1rem; letter-spacing: -.01em; }
   header p { color: var(--muted); font-size: .8rem; margin-top: 2px; }
   .viewtoggle { display: flex; border-radius: 999px; background: var(--chip); padding: 3px; flex: 0 0 auto; }
-  .viewtoggle button { border: 0; background: transparent; color: var(--ink); font-size: .82rem; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .viewtoggle button { border: 0; background: transparent; color: var(--ink); font-size: .84rem; padding: 10px 14px; border-radius: 999px; cursor: pointer; }
   .viewtoggle button.on { background: var(--chip-on); color: var(--bg); font-weight: 600; }
 
-  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  /* les rangées débordent physiquement sous les bords de l'écran : indice de scroll naturel */
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 14px; margin-inline: -14px;
+           scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
   .chips::-webkit-scrollbar { display: none; }
   .chips + .chips { padding-top: 0; }
+  .chips.ovr { -webkit-mask-image: linear-gradient(90deg, #000 94%, transparent); mask-image: linear-gradient(90deg, #000 94%, transparent); }
+  .chips.ovl { -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%); mask-image: linear-gradient(90deg, transparent, #000 6%); }
+  .chips.ovr.ovl { -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
   .chip {
-    flex: 0 0 auto; border: 0; border-radius: 999px; padding: 7px 13px;
-    background: var(--chip); color: var(--ink); font-size: .84rem; cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
+    flex: 0 0 auto; border: 0; border-radius: 999px; padding: 11px 14px; min-height: 44px;
+    display: inline-flex; align-items: center;
+    background: var(--chip); color: var(--ink); font-size: .86rem; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; scroll-snap-align: start;
   }
-  .chip.on { background: var(--chip-on); color: var(--bg); font-weight: 600; }
-  .chip.day { padding: 7px 11px; }
-  .filters { position: sticky; top: 0; background: var(--bg); padding: 10px 0 6px; z-index: 5; }
+  .chip.on { background: var(--chip-on); color: var(--bg); }
+  .chip:disabled { opacity: .4; cursor: default; }
+  .chip:active { transform: scale(.97); transition: transform .08s; }
+  .chip.day { padding: 11px 12px; min-width: 44px; justify-content: center; }
+  .filters { position: sticky; top: 0; background: var(--bg); z-index: 5;
+             padding: max(8px, env(safe-area-inset-top)) 0 2px; border-bottom: 1px solid var(--line); }
+  .filters.expanded { position: static; }  /* déplié, le panneau ne colle plus en haut de l'écran */
+  #more input { width: 100%; padding: 9px 12px; margin: 4px 0; border: 1px solid var(--chip);
+                border-radius: 10px; background: var(--card); color: var(--ink); font-size: 16px; }
+  .status { display: flex; align-items: center; gap: 10px; padding: 4px 0 4px; font-size: .78rem; color: var(--muted); }
+  .status button { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: .78rem;
+                   min-height: 44px; padding: 10px 12px; margin: -8px 0; cursor: pointer; }
 
   .section-h { display: flex; align-items: baseline; gap: 8px; margin: 22px 0 10px; }
   .section-h h2 { font-size: 1.05rem; }
   .section-h .n { color: var(--muted); font-size: .8rem; }
+  .sub-h { font-size: .88rem; font-weight: 600; color: var(--muted); margin: 16px 0 8px; }
+  .sub-h .n { font-weight: 400; font-size: .78rem; }
+  .section-h, .sub-h, .day-h, details { scroll-margin-top: 150px; }
+  .anchors { margin-top: 6px; }
   .empty { color: var(--muted); font-size: .9rem; padding: 12px 0; }
 
   .card {
-    display: flex; gap: 12px; background: var(--card); border-radius: 14px;
-    box-shadow: var(--shadow); padding: 10px; margin-bottom: 10px; overflow: hidden;
+    position: relative; display: flex; gap: 12px; background: var(--card); border-radius: 14px;
+    box-shadow: var(--shadow); border: 1px solid var(--line); padding: 10px; margin-bottom: 10px; overflow: hidden;
+    content-visibility: auto; contain-intrinsic-size: 0 180px;
   }
+  .card:active { transform: scale(.99); transition: transform .08s; }
   .card img, .card .ph {
-    width: 92px; height: 92px; flex: 0 0 92px; border-radius: 10px; object-fit: cover;
+    width: 92px; height: 92px; flex: 0 0 92px; border-radius: 10px; object-fit: cover; object-position: center 25%;
     background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
     font-size: 1.6rem;
   }
+  @media (prefers-color-scheme: dark) { .card img { filter: brightness(.88); } }
   .card .body { min-width: 0; flex: 1; }
-  .card h3 { font-size: .95rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .meta { color: var(--muted); font-size: .8rem; margin: 3px 0 4px; }
-  .meta b { color: var(--accent); font-weight: 600; }
-  .desc { font-size: .82rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .links { margin-top: 6px; display: flex; gap: 10px; }
-  .links a { color: var(--accent); font-size: .8rem; text-decoration: none; font-weight: 600; padding: 4px 0; }
-  .tag { display: inline-block; font-size: .68rem; background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+  .card h3 { font-size: 1rem; font-weight: 650; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card h3 a.stretch { color: inherit; text-decoration: none; }
+  .card a.stretch::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+  .meta { color: var(--muted); font-size: .84rem; margin: 3px 0 2px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .prat { color: var(--accent); font-size: .8rem; font-weight: 600; margin-bottom: 2px; }
+  .desc { font-size: .84rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+          position: relative; z-index: 2; cursor: pointer; }
+  .desc.open { display: block; -webkit-line-clamp: unset; }
+  .links { margin-top: 8px; display: flex; gap: 8px; position: relative; z-index: 2; }
+  .links a { color: var(--accent); font-size: .8rem; text-decoration: none; font-weight: 600;
+             padding: 8px 12px; border-radius: 999px; background: var(--chip); display: inline-flex; align-items: center; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
+  .tag { display: inline-block; font-size: .75rem; background: var(--chip); color: var(--muted); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+  .tag.urgent { background: var(--accent); color: var(--bg); font-weight: 600; }
 
   .day-h { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent-soft); }
   .day-h h2 { font-size: .98rem; text-transform: capitalize; }
@@ -68,34 +104,45 @@
   .day-h .n { color: var(--muted); font-size: .78rem; }
 
   details { margin-top: 26px; }
-  summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; padding: 6px 0; }
+  summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; padding: 8px 0; }
   summary .n { color: var(--muted); font-weight: 400; font-size: .8rem; }
-  .more { width: 100%; border: 0; background: var(--chip); color: var(--ink); border-radius: 10px; padding: 11px; font-size: .88rem; cursor: pointer; margin-top: 2px; }
+  .more { width: 100%; border: 0; background: var(--chip); color: var(--ink); border-radius: 10px; padding: 12px; font-size: .88rem; cursor: pointer; margin-top: 2px; }
   footer { margin-top: 34px; color: var(--muted); font-size: .75rem; text-align: center; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .card:active, .chip:active { transform: none; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div>
-      <h1>Sorties — vallée du Cher</h1>
+      <h1>Sorties · vallée du Cher</h1>
       <p id="updated">chargement…</p>
     </div>
-    <div class="viewtoggle">
+    <div class="viewtoggle" role="group" aria-label="Vue">
       <button id="vt-liste">Liste</button>
       <button id="vt-agenda">Agenda</button>
     </div>
   </header>
 
   <div class="filters">
-    <div class="chips" id="chips-quand"></div>
-    <div class="chips" id="chips-ring"></div>
-    <div class="chips" id="chips-tempo"></div>
-    <div class="chips" id="chips-cat"></div>
-    <div class="chips" id="chips-jours" style="display:none"></div>
+    <div class="chips" id="chips-quand" role="radiogroup" aria-label="Quand"></div>
+    <div class="chips" id="chips-jours" role="group" aria-label="Jours de la semaine" style="display:none"></div>
+    <div class="chips" id="chips-ring" role="group" aria-label="Distance"></div>
+    <div id="more" hidden>
+      <input type="search" id="q" placeholder="Rechercher : lieu, commune, mot-clé…" aria-label="Recherche"
+             enterkeyhint="search" autocorrect="off" autocapitalize="none">
+      <div class="chips" id="chips-tempo" role="group" aria-label="Rythme"></div>
+      <div class="chips" id="chips-cat" role="group" aria-label="Catégorie"></div>
+    </div>
+    <div class="status">
+      <span id="count" role="status" aria-live="polite"></span>
+      <button id="btn-more" aria-expanded="false">Filtres ▾</button>
+      <button id="btn-reset" hidden>Réinitialiser</button>
+    </div>
   </div>
 
-  <div id="content"></div>
+  <main id="content"></main>
 
   <footer>
     Données <a href="https://www.datatourisme.fr" style="color:inherit">DATAtourisme</a> — horaires à vérifier sur le site officiel avant de partir.
@@ -104,161 +151,354 @@
 
 <script>
 const RING_LABEL = {15: "≤ 15 min", 30: "≤ 30 min", 45: "≤ 45 min", 60: "≤ 1 h"};
-const TEMPO = [["ephemere", "⚡ Éphémère"], ["saisonnier", "🍃 Saisonnier"], ["recurrent", "🔁 Récurrent"], ["toujours", "🏛️ Toute l’année"]];
-const EMOJI = {marches: "🧺", concerts: "🎶", expos: "🖼️", sport: "🚵", patrimoine: "🏰", nature: "🌳", autres: "✨"};
+const RING_NEXT = {15: 30, 30: 45, 45: 60};
+const TEMPO = [["ephemere", "⚡ Ponctuel"], ["saisonnier", "🍃 En saison"], ["recurrent", "🔁 Chaque semaine"], ["toujours", "🏛️ À l’année"]];
+const EMOJI = {marches: "🧺", concerts: "🎶", expos: "🖼️", ateliers: "🎨", sport: "🚵", patrimoine: "🏰", degust: "🍷", nature: "🌳", loisirs: "🎢", autres: "✨"};
 const TEMPO_TAG = {saisonnier: "saison", recurrent: "récurrent", toujours: "à l’année"};
-const JOUR_LETTRE = ["L", "M", "M", "J", "V", "S", "D"];
-const state = { view: "liste", quand: "all", ring: 30, tempo: null, cat: null, jours: new Set(), page: 1 };
+const JN = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
+const state = { view: "liste", quand: "all", ring: 30, tempo: null, cat: null, enfants: false, jours: new Set(),
+                q: "", page: 1, pageT: 1, pageA: 1, pageS: 1, more: false,
+                open: {rec: false, touj: false, saison: false, recsans: false, saisl: true} };
 let DATA = null;
 
 const $ = id => document.getElementById(id);
 const iso = d => d.toISOString().slice(0, 10);
 const todayISO = () => iso(new Date());
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+const thumb = p => p + (p.includes("?") ? "&" : "?") + "width=280";
 
 function weekendWindow() {
   const now = new Date(), day = now.getDay();
-  if (day === 0) return [iso(now), iso(now)];
-  const sat = new Date(now); sat.setDate(now.getDate() + (6 - day));
+  if (day === 0 && now.getHours() < 18) return [iso(now), iso(now)];
+  const sat = new Date(now); sat.setDate(now.getDate() + (day === 0 ? 6 : 6 - day));
   const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
   return [iso(day === 6 ? now : sat), iso(sun)];
 }
-const overlaps = (e, from, to) => (e.du || "0000") <= to && (e.au || e.du || "9999") >= from;
+const overlaps = (e, from, to) => e.periodes
+  ? e.periodes.some(p => p.du <= to && (p.au || p.du) >= from)
+  : (e.du || "0000") <= to && (e.au || e.du || "9999") >= from;
 
+const FMT_D = new Intl.DateTimeFormat("fr-FR", {day: "numeric", month: "short"});
+const FMT_WD = new Intl.DateTimeFormat("fr-FR", {weekday: "short", day: "numeric", month: "short"});
 function fmtDates(e) {
-  const f = s => { const [y, m, d] = s.split("-"); return `${+d}/${+m}`; };
   if (!e.du) return "";
-  if (e.du === e.au || !e.au) return f(e.du);
-  return `${f(e.du)} → ${f(e.au)}`;
+  const D = s => new Date(s + "T12:00:00");
+  if (e.du === e.au || !e.au) return FMT_WD.format(D(e.du));
+  if ((new Date(e.au) - new Date(e.du)) / 864e5 > 330) return "toute l’année";
+  return `${FMT_D.format(D(e.du))} → ${FMT_D.format(D(e.au))}`;
+}
+
+// « maintenant ou jamais » : calculé sur la DERNIÈRE occurrence, pas la période courante
+function urgence(e) {
+  if (e.temporalite === "toujours" || !e.au) return null;
+  const fin = e.periodes
+    ? e.periodes.reduce((m, p) => ((p.au || p.du) > m ? (p.au || p.du) : m), e.au) : e.au;
+  const t = todayISO();
+  if (fin < t) return null;
+  if (fin === t) return "dernier jour";
+  const [, we] = weekendWindow();
+  if (fin <= we) return "dernier week-end";
+  if ((new Date(fin) - new Date(t)) / 864e5 < 14)
+    return "jusqu’au " + FMT_D.format(new Date(fin + "T12:00:00"));
+  return null;
 }
 
 function card(e, opts = {}) {
   const img = e.photo
-    ? `<img src="${e.photo}" loading="lazy" width="92" height="92" alt=""
+    ? `<img src="${esc(thumb(e.photo))}" loading="lazy" decoding="async" width="92" height="92" alt=""
          onerror="this.outerHTML='<div class=ph>${EMOJI[e.bucket] || "✨"}</div>'">`
     : `<div class="ph">${EMOJI[e.bucket] || "✨"}</div>`;
   const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((e.label || "") + " " + (e.ville || ""))}`;
-  const tags = (e.enfants ? '<span class="tag">enfants</span>' : "") +
-    (!opts.noTempo && TEMPO_TAG[e.temporalite] ? `<span class="tag">${TEMPO_TAG[e.temporalite]}</span>` : "");
-  const jours = e.jours && e.jours.length && e.temporalite === "recurrent"
-    ? ` · ${e.jours.map(j => ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"][j]).join(", ")}` : "";
+  const tags = [];
+  const urg = urgence(e);
+  if (urg) tags.push([urg, "urgent"]);
+  if (opts.tag) tags.push([opts.tag, ""]);
+  if (e.reserv) tags.push(["sur réservation", ""]);
+  if (e.enfants) tags.push(["enfants", ""]);
+  if (!opts.noTempo && TEMPO_TAG[e.temporalite]) tags.push([TEMPO_TAG[e.temporalite], ""]);
+  const jours = (e.jours || []).length && e.temporalite === "recurrent"
+    ? ` · ${e.jours.map(j => JN[j]).join(", ")}` : "";
+  let pinfo = "";
+  if (e.periodes) {
+    const mono = e.periodes.every(p => !p.au || p.au === p.du);
+    pinfo = mono ? ` · +${e.periodes.length - 1} autres dates` : ` (+${e.periodes.length - 1} autres périodes)`;
+  }
+  const dates = e.du && e.temporalite !== "toujours" && (e.periodes || e.temporalite !== "recurrent")
+    ? " · " + fmtDates(e) + pinfo : "";
+  const href = e.url || maps;  // sans site officiel, la carte ouvre l'itinéraire : tout reste tappable
+  const titre = `<a class="stretch" href="${esc(href)}" target="_blank" rel="noopener">${esc(e.label || "")}</a>`;
   return `<div class="card">
     ${img}
     <div class="body">
-      <h3>${e.label || ""}${tags}</h3>
-      <div class="meta"><b>${e.ville || ""}</b> · ${RING_LABEL[e.ring]} ${e.km ? `(${e.km} km)` : ""}${e.du ? " · " + fmtDates(e) : ""}${jours}</div>
-      <div class="desc">${e.desc || ""}</div>
+      <h3>${titre}</h3>
+      <div class="meta"><b>${esc(e.ville || "")}</b>${e.km ? ` · ${e.km} km` : ""}${dates}${jours}</div>
+      ${e.pratique ? `<div class="prat">${esc(e.pratique)}</div>` : ""}
+      ${tags.length ? `<div class="tags">${tags.map(([t, c]) => `<span class="tag${c ? " " + c : ""}">${esc(t)}</span>`).join("")}</div>` : ""}
+      ${e.desc ? `<div class="desc" onclick="this.classList.toggle('open')" title="Afficher la suite">${esc(e.desc)}</div>` : ""}
       <div class="links">
-        ${e.url ? `<a href="${e.url}" target="_blank" rel="noopener">Site ↗</a>` : ""}
         <a href="${maps}" target="_blank" rel="noopener">Itinéraire ↗</a>
       </div>
     </div>
   </div>`;
 }
 
-function chip(label, on, cb, cls = "") {
+function chip(label, on, cb, cls = "", disabled = false, radio = false) {
   const b = document.createElement("button");
   b.className = "chip " + cls + (on ? " on" : "");
   b.textContent = label;
+  if (radio) {
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", on ? "true" : "false");
+  } else {
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  if (disabled) b.disabled = true;
   b.onclick = cb;
   return b;
 }
 
-function renderChips() {
+function markOverflow(el) {
+  el.classList.toggle("ovr", el.scrollWidth - el.clientWidth - el.scrollLeft > 8);
+  el.classList.toggle("ovl", el.scrollLeft > 8);
+}
+function fillRow(id, build) {
+  const el = $(id), sl = el.scrollLeft;
+  el.replaceChildren();
+  build(el);
+  el.scrollLeft = sl;
+  markOverflow(el);
+  requestAnimationFrame(() => markOverflow(el));  // filet : mesures nulles tant que #more est hidden
+}
+function apply(fn) {
+  fn();
+  state.page = 1; state.pageT = 1; state.pageA = 1; state.pageS = 1;
+  render();
+  window.scrollTo({top: 0});
+}
+function goSec(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.tagName === "DETAILS" && !el.open) {
+    el.open = true;
+    const k = {"d-rec": "rec", "d-touj": "touj", "d-saison": "saison", "d-saisl": "saisl", "d-recsans": "recsans"}[id];
+    if (k) state.open[k] = true;
+  }
+  el.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+// même sous-ensemble que ce que la vue courante rend : les compteurs de chips ne mentent plus
+function catBase(base) {
+  const p = base.filter(e => matches(e, "cat"));
+  if (state.q) return p;
+  if (state.view === "agenda") return p.filter(e => e.temporalite !== "toujours");
+  if (state.quand === "weekend") {
+    const [ws, we] = weekendWindow();
+    return p.filter(e => e.temporalite === "toujours" || overlaps(e, ws, we));
+  }
+  return p;
+}
+
+function renderChips(base) {
   $("vt-liste").className = state.view === "liste" ? "on" : "";
   $("vt-agenda").className = state.view === "agenda" ? "on" : "";
   $("chips-quand").style.display = state.view === "liste" ? "" : "none";
   $("chips-jours").style.display = state.view === "agenda" ? "" : "none";
+  // AVANT les fillRow : #more caché ⇒ scrollWidth/clientWidth = 0 ⇒ .ovr jamais posé
+  $("more").hidden = !state.more;
+  document.querySelector(".filters").classList.toggle("expanded", state.more);
 
-  const q = $("chips-quand"); q.replaceChildren();
-  [["weekend", "Ce week-end"], ["all", "Tout"]].forEach(([k, l]) =>
-    q.append(chip(l, state.quand === k, () => { state.quand = k; state.page = 1; render(); })));
-
-  const r = $("chips-ring"); r.replaceChildren();
-  [15, 30, 45, 60].forEach(k =>
-    r.append(chip(RING_LABEL[k], state.ring === k, () => { state.ring = k; state.page = 1; render(); })));
-
-  const t = $("chips-tempo"); t.replaceChildren();
-  t.append(chip("Tout", !state.tempo, () => { state.tempo = null; state.page = 1; render(); }));
-  TEMPO.forEach(([k, l]) =>
-    t.append(chip(l, state.tempo === k, () => { state.tempo = state.tempo === k ? null : k; state.page = 1; render(); })));
-
-  const c = $("chips-cat"); c.replaceChildren();
-  c.append(chip("Tout", !state.cat, () => { state.cat = null; state.page = 1; render(); }));
-  DATA.buckets.forEach(b =>
-    c.append(chip(`${EMOJI[b.key] || ""} ${b.label}`, state.cat === b.key, () => {
-      state.cat = state.cat === b.key ? null : b.key; state.page = 1; render();
-    })));
-  c.append(chip("👧 Avec enfants", state.cat === "_enfants", () => {
-    state.cat = state.cat === "_enfants" ? null : "_enfants"; state.page = 1; render();
-  }));
-
-  const j = $("chips-jours"); j.replaceChildren();
-  ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].forEach((l, i) =>
-    j.append(chip(l, state.jours.has(i), () => {
-      state.jours.has(i) ? state.jours.delete(i) : state.jours.add(i);
-      render();
-    }, "day")));
+  fillRow("chips-quand", el => {
+    [["weekend", "Ce week-end"], ["all", "Tout voir"]].forEach(([k, l]) =>
+      el.append(chip(l, state.quand === k, () => apply(() => state.quand = k), "", false, true)));
+  });
+  fillRow("chips-ring", el => {
+    [15, 30, 45, 60].forEach(k =>
+      el.append(chip(RING_LABEL[k], state.ring === k, () => apply(() => state.ring = k))));
+    el.append(chip("👧 Enfants", state.enfants, () => apply(() => state.enfants = !state.enfants)));
+  });
+  fillRow("chips-tempo", el => {
+    el.append(chip("Tous", !state.tempo, () => apply(() => state.tempo = null)));
+    TEMPO.forEach(([k, l]) =>
+      el.append(chip(l, state.tempo === k, () => apply(() => state.tempo = state.tempo === k ? null : k))));
+  });
+  const catPool = catBase(base);
+  const nCat = {};
+  catPool.forEach(e => { nCat[e.bucket] = (nCat[e.bucket] || 0) + 1; });
+  fillRow("chips-cat", el => {
+    el.append(chip("Toutes", !state.cat, () => apply(() => state.cat = null)));
+    DATA.buckets.filter(b => nCat[b.key] || state.cat === b.key)
+      .slice().sort((a, b) => (nCat[b.key] || 0) - (nCat[a.key] || 0))
+      .forEach(b =>
+        el.append(chip(`${EMOJI[b.key] || ""} ${b.label} · ${nCat[b.key] || 0}`, state.cat === b.key,
+          () => apply(() => state.cat = state.cat === b.key ? null : b.key))));
+  });
+  fillRow("chips-jours", el => {
+    JN.forEach((l, i) =>
+      el.append(chip(l, state.jours.has(i), () => {
+        state.jours.has(i) ? state.jours.delete(i) : state.jours.add(i);
+        state.pageA = 1;
+        render();
+      }, "day")));
+  });
+  const nAct = (state.tempo ? 1 : 0) + (state.cat ? 1 : 0) + (state.q ? 1 : 0);
+  $("btn-more").textContent = `🔍 Filtres & recherche${nAct ? " (" + nAct + ")" : ""} ${state.more ? "▴" : "▾"}`;
+  $("btn-more").setAttribute("aria-expanded", String(state.more));
 }
 
-function matches(e) {
+function matches(e, skip) {
   if (e.ring > state.ring) return false;
   if (state.tempo && e.temporalite !== state.tempo) return false;
-  if (state.cat === "_enfants") { if (!e.enfants) return false; }
-  else if (state.cat && e.bucket !== state.cat) return false;
+  if (state.enfants && !e.enfants) return false;
+  if (skip !== "cat" && state.cat && e.bucket !== state.cat) return false;
+  if (state.q && !norm(`${e.label} ${e.ville || ""} ${e.desc || ""}`).includes(norm(state.q))) return false;
   return true;
 }
 
 const PAGE = 40;
 const span = e => (!e.du || !e.au) ? 999 : (new Date(e.au) - new Date(e.du)) / 864e5;
+const recTag = (e, weDows) => {
+  const js = (e.jours || []).filter(j => weDows.includes(j));
+  return js.length ? "chaque " + js.map(j => JN[j] + ".").join(" & ") : "régulier";
+};
 
 function renderListe(pool) {
+  const D = s => new Date(s + "T12:00:00");
   const [ws, we] = weekendWindow();
+  const weDows = [];
+  for (let d = D(ws); iso(d) <= we; d.setDate(d.getDate() + 1)) weDows.push((d.getDay() + 6) % 7);
   const dated = pool.filter(e => e.temporalite !== "toujours");
   const toujours = pool.filter(e => e.temporalite === "toujours");
   const actifs = state.quand === "weekend" ? dated.filter(e => overlaps(e, ws, we)) : dated;
 
-  const wkd = actifs.filter(e => overlaps(e, ws, we) && e.temporalite !== "recurrent")
-    .sort((a, b) => span(a) - span(b) || (a.km || 99) - (b.km || 99));
-  const up = state.quand === "weekend" ? [] : actifs.filter(e => !overlaps(e, ws, we) && e.temporalite !== "recurrent");
-  const rec = actifs.filter(e => e.temporalite === "recurrent");
+  const recAll = actifs.filter(e => e.temporalite === "recurrent");
+  // pour un récurrent à `periodes` (dates exactes), overlaps fait foi — pas les jours dérivés
+  const recWkd = recAll.filter(e => overlaps(e, ws, we) &&
+    (e.periodes || !(e.jours || []).length || e.jours.some(j => weDows.includes(j))));
+  // span de la période qui recouvre CE week-end (sinon les événements à occurrences
+  // multiples — Nuits du Donjon… — prenaient le malus « longue durée » à tort)
+  const spanWkd = e => {
+    if (e.periodes) {
+      const p = e.periodes.find(p => p.du <= we && (p.au || p.du) >= ws);
+      if (p) return (new Date(p.au || p.du) - new Date(p.du)) / 864e5;
+    }
+    return span(e);
+  };
+  const score = e => (e.km ?? 30) + (spanWkd(e) > 7 ? 12 : 0) + (e.desc ? 0 : 8) + (e.photo ? 0 : 4)
+                     + (e.pratique && e.pratique.includes(":") ? -2 : 0);
+  const wkdAll = actifs.filter(e => e.temporalite !== "recurrent" && overlaps(e, ws, we));
+  const wkdSaison = wkdAll.filter(e => e.temporalite === "saisonnier")
+    .sort((a, b) => ((a.au || "9999") < (b.au || "9999") ? -1 : 1));
+  const wkd = wkdAll.filter(e => e.temporalite !== "saisonnier").concat(recWkd)
+    .sort((a, b) => score(a) - score(b));
+  const up = state.quand === "weekend" ? [] : actifs.filter(e => e.temporalite !== "recurrent" && !overlaps(e, ws, we));
+  const rec = recAll.filter(e => !recWkd.includes(e));
+  const cardW = e => e.temporalite === "recurrent" ? card(e, {noTempo: 1, tag: recTag(e, weDows)}) : card(e);
 
   let html = "";
-  if (state.tempo !== "toujours" && state.tempo !== "recurrent") {
-    html += `<div class="section-h"><h2>🗓️ Ce week-end</h2><span class="n">${wkd.length}</span></div>` +
-      (wkd.length ? wkd.map(e => card(e)).join("") : `<div class="empty">Rien avec ces filtres — élargis la distance ou la catégorie.</div>`);
+
+  // Aujourd'hui & demain : du lundi au jeudi, la première réponse ne doit pas être dans 4 jours
+  const today = todayISO();
+  const dowT = (new Date().getDay() + 6) % 7;
+  let nowBloc = [];
+  if (dowT <= 3 && state.tempo !== "toujours") {
+    const dm = new Date(); dm.setDate(dm.getDate() + 1);
+    const mIso = iso(dm), dowD = (dowT + 1) % 7;
+    nowBloc = dated.filter(e => e.temporalite === "recurrent"
+        ? (overlaps(e, today, mIso) && (e.periodes || (e.jours || []).some(j => j === dowT || j === dowD)))
+        : (e.temporalite === "ephemere" && overlaps(e, today, mIso)))
+      .sort((a, b) => (a.km || 99) - (b.km || 99));
+  }
+
+  const anchors = [];
+  if (nowBloc.length) anchors.push(["sec-now", `Aujourd’hui (${nowBloc.length})`]);
+  if (state.tempo !== "toujours") anchors.push(["sec-wkd", `Ce week-end (${wkd.length})`]);
+  if (up.length) anchors.push(["sec-up", `À venir (${up.length})`]);
+  if (rec.length) anchors.push(["d-rec", `Réguliers (${rec.length})`]);
+  if (toujours.length) anchors.push(["d-touj", `Toute l’année (${toujours.length})`]);
+  if (anchors.length > 1)
+    html += `<div class="chips anchors">` +
+      anchors.map(([id, l]) => `<button class="chip" onclick="goSec('${id}')">${l}</button>`).join("") + `</div>`;
+
+  if (nowBloc.length)
+    html += `<div class="section-h" id="sec-now"><h2>🌤️ Aujourd’hui &amp; demain</h2><span class="n">${nowBloc.length}</span></div>` +
+      nowBloc.map(e => e.temporalite === "recurrent" ? card(e, {noTempo: 1, tag: "régulier"}) : card(e)).join("");
+
+  if (state.tempo !== "toujours") {
+    html += `<div class="section-h" id="sec-wkd"><h2>🗓️ Ce week-end</h2><span class="n">${wkd.length}</span></div>`;
+    if (!wkd.length) {
+      html += `<div class="empty">Rien ce week-end dans ce rayon.</div>`;
+      if (RING_NEXT[state.ring])
+        html += `<button class="more" onclick="state.ring=RING_NEXT[state.ring];state.page=1;render();window.scrollTo({top:0})">Élargir à ${RING_LABEL[RING_NEXT[state.ring]]}</button>`;
+    } else if (ws === we) {
+      html += wkd.map(cardW).join("");
+    } else {
+      const satDow = weDows[0], sunDow = weDows[weDows.length - 1];
+      const on = (e, dIso, dow) => overlaps(e, dIso, dIso) &&
+        (e.periodes || e.temporalite !== "recurrent" || !(e.jours || []).length || e.jours.includes(dow));
+      const both = wkd.filter(e => on(e, ws, satDow) && on(e, we, sunDow));
+      const sat = wkd.filter(e => on(e, ws, satDow) && !on(e, we, sunDow));
+      const sun = wkd.filter(e => !on(e, ws, satDow) && on(e, we, sunDow));
+      const F = new Intl.DateTimeFormat("fr-FR", {weekday: "long", day: "numeric"});
+      const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+      const sub = (t, arr) => arr.length
+        ? `<div class="sub-h">${t} <span class="n">· ${arr.length}</span></div>` + arr.map(cardW).join("") : "";
+      html += sub("Samedi et dimanche", both) +
+              sub(`${cap(F.format(D(ws)))} uniquement`, sat) +
+              sub(`${cap(F.format(D(we)))} uniquement`, sun);
+    }
+    // saisonniers longue durée : présents tous les week-ends jusqu'à l'automne → bloc à part
+    if (wkdSaison.length) {
+      const openS = state.open.saisl ? " open" : "";
+      const shownS = wkdSaison.slice(0, PAGE * state.pageS);
+      html += `<details id="d-saisl"${openS}><summary>🍃 Aussi en ce moment <span class="n">(${wkdSaison.length})</span></summary>` +
+        shownS.map(e => card(e)).join("");
+      if (wkdSaison.length > shownS.length)
+        html += `<button class="more" onclick="state.pageS++;render()">Voir plus (${wkdSaison.length - shownS.length})</button>`;
+      html += `</details>`;
+    }
     const shown = up.slice(0, PAGE * state.page);
     if (up.length) {
-      html += `<div class="section-h"><h2>📅 À venir</h2><span class="n">${up.length}</span></div>` + shown.map(e => card(e)).join("");
+      html += `<div class="section-h" id="sec-up"><h2>📅 À venir</h2><span class="n">${up.length}</span></div>` + shown.map(e => card(e)).join("");
       if (up.length > shown.length) html += `<button class="more" onclick="state.page++;render()">Voir plus (${up.length - shown.length})</button>`;
     }
   }
   if (rec.length && state.tempo !== "toujours") {
-    const open = state.tempo === "recurrent" ? " open" : "";
-    html += `<details${open}><summary>🔁 Marchés &amp; rendez-vous réguliers <span class="n">(${rec.length})</span></summary>` +
+    const open = state.open.rec || state.tempo === "recurrent" ? " open" : "";
+    html += `<details id="d-rec"${open}><summary>🔁 Marchés &amp; rendez-vous réguliers <span class="n">(${rec.length})</span></summary>` +
       rec.map(e => card(e, {noTempo: 1})).join("") + `</details>`;
   }
   if (toujours.length) {
-    const open = state.tempo === "toujours" ? " open" : "";
-    const sorted = toujours.slice().sort((a, b) => (a.km || 99) - (b.km || 99));
-    const shownT = state.tempo === "toujours" ? sorted.slice(0, PAGE * state.page) : sorted.slice(0, 60);
-    html += `<details${open}><summary>🏛️ À faire toute l’année <span class="n">(${toujours.length})</span></summary>` +
+    const open = state.open.touj || state.tempo === "toujours" ? " open" : "";
+    const qs = e => (e.km ?? 30) + (e.photo ? 0 : 8) + (e.url ? 0 : 4);
+    const sorted = toujours.slice().sort((a, b) => qs(a) - qs(b));
+    const shownT = sorted.slice(0, 60 * state.pageT);
+    const nTxt = shownT.length < sorted.length ? `${shownT.length} sur ${sorted.length}` : sorted.length;
+    html += `<details id="d-touj"${open}><summary>🏛️ À faire toute l’année <span class="n">(${nTxt})</span></summary>` +
       shownT.map(e => card(e, {noTempo: 1})).join("");
-    if (state.tempo === "toujours" && sorted.length > shownT.length)
-      html += `<button class="more" onclick="state.page++;render()">Voir plus (${sorted.length - shownT.length})</button>`;
+    if (sorted.length > shownT.length)
+      html += `<button class="more" onclick="state.pageT++;render()">Voir plus (${sorted.length - shownT.length})</button>`;
     html += `</details>`;
   }
-  return html;
+  const parts = [];
+  if (state.tempo !== "toujours") parts.push(`${wkd.length} ce week-end`);
+  if (up.length) parts.push(`${up.length} à venir`);
+  if (toujours.length) parts.push(`${toujours.length} à l’année`);
+  return {html, status: (parts.join(" · ") || "0 sortie") + ` · ${RING_LABEL[state.ring]}`};
 }
 
 function renderAgenda(pool) {
-  const dated = pool.filter(e => e.temporalite === "ephemere");
-  const recs = pool.filter(e => e.temporalite === "recurrent" && e.jours.length);
-  const saison = pool.filter(e => e.temporalite === "saisonnier");
+  const dated = pool.filter(e => e.temporalite !== "toujours" && (e.temporalite === "ephemere" || e.periodes));
+  const recs = pool.filter(e => e.temporalite === "recurrent" && !e.periodes && (e.jours || []).length);
+  const recsSans = pool.filter(e => e.temporalite === "recurrent" && !e.periodes && !(e.jours || []).length);
+  const saison = pool.filter(e => e.temporalite === "saisonnier" && !e.periodes)
+    .sort((a, b) => ((a.au || "9999") < (b.au || "9999") ? -1 : 1));  // ce qui ferme le plus tôt d'abord
   const horizon = (DATA.window_weeks || 3) * 7;
   const fmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const DAYCAP = 12, DPP = 7;  // 12 cartes max par jour, 7 jours par page : le DOM reste léger
 
   let html = "";
-  let shownDays = 0;
+  let shownDays = 0, totalDates = 0, moreDays = 0;
   for (let i = 0; i < horizon; i++) {
     const d = new Date(); d.setDate(d.getDate() + i);
     const dow = (d.getDay() + 6) % 7; // 0 = lundi
@@ -268,36 +508,161 @@ function renderAgenda(pool) {
       .concat(recs.filter(e => e.jours.includes(dow) && overlaps(e, dIso, dIso)))
       .sort((a, b) => (a.km || 99) - (b.km || 99));
     if (!evts.length) continue;
+    totalDates += evts.length;
+    if (shownDays >= DPP * state.pageA) { moreDays++; continue; }
     shownDays++;
+    const shown = evts.slice(0, DAYCAP);
     html += `<div class="day-h${i === 0 ? " today" : ""}"><h2>${i === 0 ? "Aujourd’hui — " : i === 1 ? "Demain — " : ""}${fmt.format(d)}</h2><span class="n">${evts.length}</span></div>` +
-      evts.map(e => card(e, {noTempo: 1})).join("");
+      shown.map(e => card(e, {noTempo: 1})).join("");
+    if (evts.length > shown.length)
+      html += `<div class="empty">+${evts.length - shown.length} autres ce jour-là — affine la distance ou la catégorie.</div>`;
   }
-  if (!shownDays) html += `<div class="empty">Rien sur ces jours avec ces filtres.</div>`;
+  if (!shownDays) html += `<div class="empty">Rien sur ces jours avec ces filtres — élargis la distance ou change de jour.</div>`;
+  if (moreDays) html += `<button class="more" onclick="state.pageA++;render()">Voir les ${moreDays} jour${moreDays > 1 ? "s" : ""} suivant${moreDays > 1 ? "s" : ""}</button>`;
 
-  if (saison.length && !state.tempo) {
-    html += `<details><summary>🍃 En ce moment (expos, animations de saison) <span class="n">(${saison.length})</span></summary>` +
-      saison.slice(0, 60).map(e => card(e, {noTempo: 1})).join("") + `</details>`;
+  if (saison.length && state.tempo !== "ephemere" && state.tempo !== "recurrent") {
+    const open = state.open.saison || state.tempo === "saisonnier" ? " open" : "";
+    const shownS = saison.slice(0, 60 * state.pageS);
+    const nTxt = shownS.length < saison.length ? `${shownS.length} sur ${saison.length}` : saison.length;
+    html += `<details id="d-saison"${open}><summary>🍃 En ce moment (expos, animations de saison) <span class="n">(${nTxt})</span></summary>` +
+      shownS.map(e => card(e, {noTempo: 1})).join("");
+    if (saison.length > shownS.length)
+      html += `<button class="more" onclick="state.pageS++;render()">Voir plus (${saison.length - shownS.length})</button>`;
+    html += `</details>`;
   }
-  return html;
+  if (recsSans.length) {
+    const open = state.open.recsans ? " open" : "";
+    html += `<details id="d-recsans"${open}><summary>🔁 Réguliers sans jour identifié <span class="n">(${recsSans.length})</span></summary>` +
+      recsSans.map(e => card(e, {noTempo: 1, tag: "jour à vérifier"})).join("") + `</details>`;
+  }
+  html += `<div class="empty">Les lieux ouverts toute l’année n’apparaissent pas dans l’agenda — voir la vue Liste.</div>`;
+  return {html, status: `${totalDates} date${totalDates > 1 ? "s" : ""} sur ${DATA.window_weeks || 3} semaines · ${RING_LABEL[state.ring]}`};
+}
+
+// recherche active : résultats à plat, pas de sections ni d'accordéons fermés
+function renderSearch(pool) {
+  const q = norm(state.q);
+  const rel = e => norm(e.label).includes(q) ? 0 : norm(e.ville || "").includes(q) ? 1 : 2;
+  const res = pool.slice().sort((a, b) => rel(a) - rel(b) || (a.km ?? 99) - (b.km ?? 99));
+  const shown = res.slice(0, PAGE * state.page);
+  let html = `<div class="section-h"><h2>🔍 ${res.length} résultat${res.length > 1 ? "s" : ""} pour « ${esc(state.q)} »</h2></div>`;
+  html += res.length ? shown.map(e => card(e)).join("")
+    : `<div class="empty">Aucun résultat — vérifie l’orthographe ou élargis la distance.</div>`;
+  if (res.length > shown.length)
+    html += `<button class="more" onclick="state.page++;render()">Voir plus (${res.length - shown.length})</button>`;
+  html += `<button class="more" onclick="$('q').value='';state.q='';state.page=1;render()">✕ Effacer la recherche</button>`;
+  return {html, status: `${res.length} résultat${res.length > 1 ? "s" : ""} · ${RING_LABEL[state.ring]}`};
+}
+
+function bindDetails() {
+  [["d-rec", "rec"], ["d-touj", "touj"], ["d-saison", "saison"], ["d-saisl", "saisl"], ["d-recsans", "recsans"]].forEach(([id, k]) => {
+    const el = $(id);
+    if (el) el.addEventListener("toggle", () => { state.open[k] = el.open; });
+  });
+}
+
+function updateStatus(txt) {
+  $("count").textContent = txt;
+  const dirty = state.quand !== "all" || state.ring !== 30 || state.tempo || state.cat || state.q ||
+                state.enfants || (state.view === "agenda" && state.jours.size);
+  $("btn-reset").hidden = !dirty;
+}
+
+function saveState() {
+  const s = {view: state.view, quand: state.quand, ring: state.ring, tempo: state.tempo,
+             cat: state.cat, q: state.q, jours: [...state.jours], enfants: state.enfants,
+             open: state.open, ts: Date.now()};
+  try { localStorage.setItem("sorties-filtres", JSON.stringify(s)); } catch (e) {}
+  const h = new URLSearchParams();
+  if (s.view !== "liste") h.set("v", s.view);
+  if (s.quand !== "all") h.set("w", s.quand);
+  if (s.ring !== 30) h.set("r", s.ring);
+  if (s.tempo) h.set("t", s.tempo);
+  if (s.cat) h.set("c", s.cat);
+  if (s.q) h.set("s", s.q);
+  if (s.jours.length) h.set("j", s.jours.join(","));
+  if (s.enfants) h.set("e", "1");
+  const hs = h.toString();
+  history.replaceState(null, "", hs ? "#" + hs : location.pathname + location.search);
+}
+
+function loadState() {
+  let s = null;
+  if (location.hash.length > 1) {
+    const h = new URLSearchParams(location.hash.slice(1));
+    s = {view: h.get("v"), quand: h.get("w"), ring: +h.get("r") || null, tempo: h.get("t"),
+         cat: h.get("c"), q: h.get("s"), jours: h.get("j") ? h.get("j").split(",").map(Number) : null,
+         enfants: h.get("e") === "1"};
+  } else {
+    try { s = JSON.parse(localStorage.getItem("sorties-filtres")); } catch (e) {}
+    // filtres de plus de 12 h : on ne restaure que le durable (vue, distance, accordéons),
+    // sinon un « ≤ 15 min + marchés » posé il y a 15 jours fait paraître la page vide
+    if (s && (!s.ts || Date.now() - s.ts > 432e5)) s = {view: s.view, ring: s.ring, open: s.open};
+  }
+  if (!s) return;
+  if (["liste", "agenda"].includes(s.view)) state.view = s.view;
+  if (["weekend", "all"].includes(s.quand)) state.quand = s.quand;
+  if ([15, 30, 45, 60].includes(s.ring)) state.ring = s.ring;
+  if (typeof s.tempo === "string" && s.tempo) state.tempo = s.tempo;
+  if (typeof s.cat === "string" && s.cat) state.cat = s.cat;
+  if (state.cat === "_enfants") { state.cat = null; state.enfants = true; }  // ancien encodage
+  if (s.enfants === true) state.enfants = true;
+  if (typeof s.q === "string" && s.q) state.q = s.q;
+  if (Array.isArray(s.jours)) state.jours = new Set(s.jours.filter(n => Number.isInteger(n) && n >= 0 && n <= 6));
+  if (s.open && typeof s.open === "object")
+    for (const k in state.open) if (typeof s.open[k] === "boolean") state.open[k] = s.open[k];
 }
 
 function render() {
-  renderChips();
   const today = todayISO();
-  const pool = DATA.events.filter(matches)
-    .filter(e => e.temporalite === "toujours" || (e.au || e.du || "9999") >= today);
-  $("content").innerHTML = state.view === "liste" ? renderListe(pool) : renderAgenda(pool);
+  const base = DATA.events.filter(e => e.temporalite === "toujours" || (e.au || e.du || "9999") >= today);
+  renderChips(base);
+  const pool = base.filter(e => matches(e));
+  const out = state.q ? renderSearch(pool)
+    : state.view === "liste" ? renderListe(pool) : renderAgenda(pool);
+  $("content").innerHTML = out.html;
+  bindDetails();
+  updateStatus(out.status);
+  saveState();
 }
 
-$("vt-liste").onclick = () => { state.view = "liste"; state.page = 1; render(); };
-$("vt-agenda").onclick = () => { state.view = "agenda"; render(); };
+$("vt-liste").onclick = () => apply(() => { state.view = "liste"; });
+$("vt-agenda").onclick = () => apply(() => { state.view = "agenda"; });
+$("btn-more").onclick = () => {
+  state.more = !state.more;
+  render();
+  if (state.more) $("q").focus({preventScroll: true});
+};
+$("btn-reset").onclick = () => apply(() => {
+  Object.assign(state, {quand: "all", ring: 30, tempo: null, cat: null, q: "", enfants: false});
+  state.jours = new Set();
+  $("q").value = "";
+});
+let qTimer;
+$("q").addEventListener("input", () => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => {
+    state.q = $("q").value.trim();
+    state.page = 1; state.pageT = 1; state.pageA = 1; state.pageS = 1;
+    render();
+  }, 200);
+});
+document.querySelectorAll(".chips").forEach(el => el.addEventListener("scroll", () => markOverflow(el), {passive: true}));
+window.addEventListener("resize", () => document.querySelectorAll(".chips").forEach(el => markOverflow(el)));
+
+loadState();
+$("q").value = state.q;
 
 fetch("data.json").then(r => r.json()).then(d => {
   DATA = d;
   const [y, m, dd] = d.generated.split("-");
-  $("updated").textContent = `Saint-Georges-sur-Cher · mis à jour le ${+dd}/${+m}/${y}`;
+  $("updated").textContent = `Saint-Georges-sur-Cher · maj ${+dd}/${+m}/${y}`;
   render();
-}).catch(() => { $("updated").textContent = "Impossible de charger data.json"; });
+}).catch(() => {
+  $("updated").textContent = "Impossible de charger data.json";
+  $("content").innerHTML = `<div class="empty">Impossible de charger les données — vérifie la connexion.</div>
+    <button class="more" onclick="location.reload()">Réessayer</button>`;
+});
 </script>
 </body>
 </html>
