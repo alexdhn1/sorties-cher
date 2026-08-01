@@ -135,7 +135,7 @@
     <div class="viewtoggle" role="group" aria-label="Vue">
       <button id="vt-liste">Liste</button>
       <button id="vt-agenda">Agenda</button>
-      <button id="vt-sejour" hidden>Séjour</button>
+      <button id="vt-sejour">Séjour</button>
     </div>
   </header>
 
@@ -358,7 +358,6 @@ function catBase(base) {
 function renderChips(base) {
   $("vt-liste").className = state.view === "liste" ? "on" : "";
   $("vt-agenda").className = state.view === "agenda" ? "on" : "";
-  $("vt-sejour").hidden = !sejourOn;
   $("vt-sejour").className = state.view === "sejour" ? "on" : "";
   $("chips-quand").style.display = state.view === "liste" ? "" : "none";
   $("chips-jours").style.display = state.view === "agenda" ? "" : "none";
@@ -974,7 +973,7 @@ function render() {
 
 $("vt-liste").onclick = () => apply(() => { state.view = "liste"; });
 $("vt-agenda").onclick = () => apply(() => { state.view = "agenda"; });
-$("vt-sejour").onclick = () => apply(() => { state.view = "sejour"; });
+$("vt-sejour").onclick = () => apply(() => { state.view = "sejour"; sejourOn = true; });
 $("btn-more").onclick = () => {
   state.more = !state.more;
   render();
