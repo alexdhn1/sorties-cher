@@ -97,13 +97,80 @@
   priorite: 3
   remarque: Événements sur la home + agenda PDF saisonnier. Renvoie vers Facebook et PanneauPocket.
 
-# --- Pistes non branchées ---
+# --- PanneauPocket (vérifié 2026-08-02 : pages ville rendues CÔTÉ SERVEUR → simple fetch html) ---
+# Panneaux = annonces courtes datées (travaux, fêtes, alertes). L'extraction sémantique de la tâche
+# hebdo trie les événements du reste. Couvre les communes SANS site web exploitable.
+
+- nom: PanneauPocket Saint-Georges-sur-Cher
+  commune: Saint-Georges-sur-Cher
+  url: https://app.panneaupocket.com/ville/1101307643-saint-georges-sur-cher-41400
+  type: panneaupocket
+  mode: html
+  priorite: 1
+  remarque: SEULE source de la commune de résidence (site municipal mort).
+
+- nom: PanneauPocket Chissay-en-Touraine
+  commune: Chissay-en-Touraine
+  url: https://app.panneaupocket.com/ville/374901552-chissay-en-touraine-41400
+  type: panneaupocket
+  mode: html
+  priorite: 1
+  remarque: Site municipal en erreur 500 — PanneauPocket est la seule source.
+
+- nom: PanneauPocket Pontlevoy
+  commune: Pontlevoy
+  url: https://app.panneaupocket.com/ville/1916505726-pontlevoy-41400
+  type: panneaupocket
+  mode: html
+  priorite: 1
+  remarque: Contourne le certificat TLS invalide du site municipal.
+
+- nom: PanneauPocket Vallières-les-Grandes
+  commune: Vallières-les-Grandes
+  url: https://app.panneaupocket.com/ville/25515937-vallieres-les-grandes-41400
+  type: panneaupocket
+  mode: html
+  priorite: 1
+  remarque: Aucun site municipal — seule source.
+
+- nom: PanneauPocket Montrichard Val de Cher
+  commune: Montrichard Val de Cher
+  url: https://app.panneaupocket.com/ville/464287624-montrichard-val-de-cher-41400
+  type: panneaupocket
+  mode: html
+  priorite: 2
+  remarque: Complément de l'iCal (alertes et annonces hors agenda).
+
+- nom: PanneauPocket Faverolles-sur-Cher
+  commune: Faverolles-sur-Cher
+  url: https://app.panneaupocket.com/ville/2078429391-faverolles-sur-cher-41400
+  type: panneaupocket
+  mode: html
+  priorite: 2
+  remarque: Complément du site Localiti.
+
+- nom: PanneauPocket Monthou-sur-Cher
+  commune: Monthou-sur-Cher
+  url: https://app.panneaupocket.com/ville/614441948-monthou-sur-cher-41400
+  type: panneaupocket
+  mode: html
+  priorite: 2
+  remarque: La mairie y renvoie explicitement.
+
+- nom: PanneauPocket Luzillé
+  commune: Luzillé
+  url: https://app.panneaupocket.com/ville/1589422535-luzille-37150
+  type: panneaupocket
+  mode: html
+  priorite: 3
+  remarque: Commune voisine (37150) sans autre source.
+
+# API de découverte : https://app.panneaupocket.com/public-api/city (liste des 15 657 collectivités,
+# id + lien ville). Pas d'API panneaux trouvée — le HTML serveur des pages ville suffit.
+
+# --- Pistes restantes ---
 # OT Autour de Chenonceaux (https://autourdechenonceaux.fr/agenda/) : agenda rendu côté client,
 #   filtres "Brocante et vide-greniers" — identifier l'API sous-jacente (Apidae/Tourinsoft) via
 #   l'onglet réseau d'un navigateur. Priorité d'investigation n°1.
-# PanneauPocket (app.panneaupocket.com) : LE canal commun du secteur, y compris Saint-Georges-sur-Cher
-#   (dont le site est mort : agenda vide, actus 404). App JS — nécessite navigateur. Priorité n°2.
-# Pontlevoy & Chisseaux : sites actifs mais certificat TLS invalide — récupérables avec verify désactivé
-#   (décision à prendre : accepter le risque TLS pour deux mairies ou attendre qu'elles réparent).
-# Sans source : Angé (site périmé 2024), Chissay (HTTP 500), Vallières-les-Grandes (IntraMuros only),
-#   Civray-de-Touraine (agenda figé 2025).
+# Sans source restants : Angé (site périmé 2024, pas sur PanneauPocket non plus),
+#   Civray-de-Touraine (agenda figé 2025), Chisseaux (TLS invalide, pas sur PanneauPocket).
