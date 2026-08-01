@@ -72,7 +72,7 @@
   .card {
     position: relative; display: flex; gap: 12px; background: var(--card); border-radius: 14px;
     box-shadow: var(--shadow); border: 1px solid var(--line); padding: 10px; margin-bottom: 10px; overflow: hidden;
-    content-visibility: auto; contain-intrinsic-size: 0 180px;
+    content-visibility: auto; contain-intrinsic-size: 0 202px;
   }
   .card:active { transform: scale(.99); transition: transform .08s; }
   .card img, .card .ph {
@@ -105,6 +105,17 @@
   .day-h.today h2 { color: var(--accent); }
   .day-h .n { color: var(--muted); font-size: .78rem; }
 
+  .hero { background: var(--accent-soft); border-radius: 14px; padding: 14px 16px; margin: 14px 0 4px; }
+  .hero h2 { font-size: 1.05rem; line-height: 1.3; }
+  .hero p { color: var(--muted); font-size: .84rem; margin-top: 4px; }
+  .hero .edit { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: .8rem;
+                padding: 8px 12px 0 0; margin: 0; cursor: pointer; }
+  .sej-dates { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin: 10px 0 2px; }
+  .sej-dates[hidden] { display: none; }  /* display:flex gagnerait sinon sur l'attribut hidden */
+  .sej-dates label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); }
+  .sej-dates input { padding: 9px 10px; border: 1px solid var(--chip); border-radius: 10px;
+                     background: var(--card); color: var(--ink); font-size: 16px; }
+
   details { margin-top: 26px; }
   summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; padding: 8px 0; }
   summary .n { color: var(--muted); font-weight: 400; font-size: .8rem; }
@@ -124,6 +135,7 @@
     <div class="viewtoggle" role="group" aria-label="Vue">
       <button id="vt-liste">Liste</button>
       <button id="vt-agenda">Agenda</button>
+      <button id="vt-sejour" hidden>Séjour</button>
     </div>
   </header>
 
@@ -159,15 +171,25 @@ const EMOJI = {marches: "🧺", concerts: "🎶", expos: "🖼️", ateliers: "�
 const TEMPO_TAG = {saisonnier: "saison", recurrent: "récurrent", toujours: "à l’année"};
 const JN = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
 const state = { view: "liste", quand: "all", ring: 30, tempo: null, cat: null, enfants: false, jours: new Set(),
-                q: "", page: 1, pageT: 1, pageA: 1, pageS: 1, more: false,
-                open: {rec: false, touj: false, saison: false, recsans: false, saisl: true} };
+                q: "", page: 1, pageT: 1, pageA: 1, pageS: 1, more: false, du: null, au: null,
+                open: {rec: false, touj: false, saison: false, recsans: false, saisl: true, sejs: false} };
 let DATA = null;
+let DATAMAX = "";      // dernière date d'événement connue : au-delà, l'agenda ne promet rien
+let sejourOn = false;  // le 3e onglet « Séjour » n'existe que pour qui arrive avec des dates
+let linkDatesKO = false;  // lien Séjour tronqué ou dates illisibles : on le dit au lieu de retomber en Liste
 
 const $ = id => document.getElementById(id);
 const iso = d => d.toISOString().slice(0, 10);
 const todayISO = () => iso(new Date());
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+// une date n'est valide que si elle EXISTE (2026-13-45, 2026-02-30 → refusées, pas de Invalid Date qui plante le rendu)
+const okD = v => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || "")) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
 const thumb = p => p + (p.includes("?") ? "&" : "?") + "width=280";
 
 function weekendWindow() {
@@ -211,7 +233,9 @@ function card(e, opts = {}) {
     ? `<img src="${esc(thumb(e.photo))}" loading="lazy" decoding="async" width="92" height="92" alt=""
          onerror="this.outerHTML='<div class=ph>${EMOJI[e.bucket] || "✨"}</div>'">`
     : `<div class="ph">${EMOJI[e.bucket] || "✨"}</div>`;
-  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((e.label || "") + " " + (e.ville || ""))}`;
+  // vrai itinéraire depuis chez Alex ; pour un événement daté, la commune est plus fiable qu'un titre d'animation que Maps ne résout pas
+  const dest = e.temporalite === "toujours" ? `${e.label || ""} ${e.ville || ""}` : (e.ville || e.label || "");
+  const maps = `https://www.google.com/maps/dir/?api=1&origin=Saint-Georges-sur-Cher&destination=${encodeURIComponent(dest.trim())}`;
   const tags = [];
   const urg = urgence(e);
   if (urg) tags.push([urg, "urgent"]);
@@ -231,15 +255,27 @@ function card(e, opts = {}) {
   if (e.du && e.temporalite !== "toujours" && (e.periodes || e.temporalite !== "recurrent")) {
     let dtxt = fmtDates(e), pinfo = "";
     if (e.periodes) {
+      const Dp = s => new Date(s + "T12:00:00");
       const mono = e.periodes.every(p => !p.au || p.au === p.du);
+      // référence temporelle : le jour du bloc (vue Séjour), le début de la fenêtre, sinon aujourd'hui
+      const ref = opts.day || (opts.win && opts.win[0]) || todayISO();
       if (mono) {
-        // dates ponctuelles multiples : afficher la PROCHAINE, pas l'enveloppe (trompeuse)
-        const t = todayISO();
-        const next = e.periodes.map(p => p.du).filter(d => d >= t).sort()[0] || e.du;
-        dtxt = FMT_WD.format(new Date(next + "T12:00:00"));
-        pinfo = ` · +${e.periodes.length - 1} autres dates`;
+        // dates ponctuelles multiples : afficher la PROCHAINE depuis la référence, pas l'enveloppe
+        const ds = e.periodes.map(p => p.du).sort();
+        const next = ds.find(x => x >= ref) || ds[ds.length - 1];
+        dtxt = FMT_WD.format(Dp(next));
+        if (e.periodes.length > 1) pinfo = ` · +${e.periodes.length - 1} autres dates`;
       } else {
-        pinfo = ` (+${e.periodes.length - 1} autres périodes)`;
+        // afficher la période EN COURS à la référence (ou la prochaine) — jamais l'enveloppe du→au,
+        // qui faisait lire « 25 juil. → 29 août » sous un jour de décembre
+        const lim = opts.win ? opts.win[1] : "9999";
+        const cur = e.periodes.filter(p => (p.au || p.du) >= ref && p.du <= lim)
+          .sort((a, b) => (a.du < b.du ? -1 : 1))[0]
+          || e.periodes.slice().sort((a, b) => (a.du < b.du ? -1 : 1))[e.periodes.length - 1];
+        dtxt = (!cur.au || cur.au === cur.du) ? FMT_WD.format(Dp(cur.du))
+          : (new Date(cur.au) - new Date(cur.du)) / 864e5 > 330 ? "toute l’année"
+          : `${FMT_D.format(Dp(cur.du))} → ${FMT_D.format(Dp(cur.au))}`;
+        if (e.periodes.length > 1) pinfo = ` (+${e.periodes.length - 1} autres périodes)`;
       }
     }
     dates = " · " + dtxt + pinfo;
@@ -309,6 +345,8 @@ function goSec(id) {
 function catBase(base) {
   const p = base.filter(e => matches(e, "cat"));
   if (state.q) return p;
+  if (state.view === "sejour")
+    return state.du && state.au ? p.filter(e => e.temporalite === "toujours" || overlaps(e, state.du, state.au)) : p;
   if (state.view === "agenda") return p.filter(e => e.temporalite !== "toujours");
   if (state.quand === "weekend") {
     const [ws, we] = weekendWindow();
@@ -320,8 +358,13 @@ function catBase(base) {
 function renderChips(base) {
   $("vt-liste").className = state.view === "liste" ? "on" : "";
   $("vt-agenda").className = state.view === "agenda" ? "on" : "";
+  $("vt-sejour").hidden = !sejourOn;
+  $("vt-sejour").className = state.view === "sejour" ? "on" : "";
   $("chips-quand").style.display = state.view === "liste" ? "" : "none";
   $("chips-jours").style.display = state.view === "agenda" ? "" : "none";
+  // en mode Séjour, la fenêtre temporelle EST le séjour : quand/tempo/cat/jours n'ont pas de sens
+  $("chips-tempo").style.display = state.view === "sejour" ? "none" : "";
+  $("chips-cat").style.display = state.view === "sejour" ? "none" : "";
   // AVANT les fillRow : #more caché ⇒ scrollWidth/clientWidth = 0 ⇒ .ovr jamais posé
   $("more").hidden = !state.more;
   document.querySelector(".filters").classList.toggle("expanded", state.more);
@@ -359,16 +402,18 @@ function renderChips(base) {
         render();
       }, "day")));
   });
-  const nAct = (state.tempo ? 1 : 0) + (state.cat ? 1 : 0) + (state.q ? 1 : 0);
+  const sejV = state.view === "sejour";
+  const nAct = (!sejV && state.tempo ? 1 : 0) + (!sejV && state.cat ? 1 : 0) + (state.q ? 1 : 0);
   $("btn-more").textContent = `🔍 Filtres & recherche${nAct ? " (" + nAct + ")" : ""} ${state.more ? "▴" : "▾"}`;
   $("btn-more").setAttribute("aria-expanded", String(state.more));
 }
 
 function matches(e, skip) {
   if (e.ring > state.ring) return false;
-  if (state.tempo && e.temporalite !== state.tempo) return false;
+  // tempo et cat cachés en mode Séjour : un filtre invisible ne doit pas amputer la vue
+  if (state.tempo && state.view !== "sejour" && e.temporalite !== state.tempo) return false;
   if (state.enfants && !e.enfants) return false;
-  if (skip !== "cat" && state.cat && e.bucket !== state.cat) return false;
+  if (skip !== "cat" && state.cat && state.view !== "sejour" && e.bucket !== state.cat) return false;
   if (state.q && !norm(`${e.label} ${e.ville || ""} ${e.desc || ""}`).includes(norm(state.q))) return false;
   return true;
 }
@@ -558,12 +603,12 @@ function renderAgenda(pool) {
 }
 
 // recherche active : résultats à plat, pas de sections ni d'accordéons fermés
-function renderSearch(pool) {
+function renderSearch(pool, scope = "") {
   const q = norm(state.q);
   const rel = e => norm(e.label).includes(q) ? 0 : norm(e.ville || "").includes(q) ? 1 : 2;
   const res = pool.slice().sort((a, b) => rel(a) - rel(b) || (a.km ?? 99) - (b.km ?? 99));
   const shown = res.slice(0, PAGE * state.page);
-  let html = `<div class="section-h"><h2>🔍 ${res.length} résultat${res.length > 1 ? "s" : ""} pour « ${esc(state.q)} »</h2></div>`;
+  let html = `<div class="section-h"><h2>🔍 ${res.length} résultat${res.length > 1 ? "s" : ""} pour « ${esc(state.q)} »${scope ? " · " + scope : ""}</h2></div>`;
   html += res.length ? shown.map(e => card(e)).join("")
     : `<div class="empty">Aucun résultat — vérifie l’orthographe ou élargis la distance.</div>`;
   if (res.length > shown.length)
@@ -572,8 +617,239 @@ function renderSearch(pool) {
   return {html, status: `${res.length} résultat${res.length > 1 ? "s" : ""} · ${RING_LABEL[state.ring]}`};
 }
 
+// ——— Vue Séjour : pour les amis qui viennent dormir chez Alex ———
+function fmtRange(du, au) {
+  const D = s => new Date(s + "T12:00:00");
+  // l'année s'affiche dès qu'elle n'est pas l'année en cours : « du 1 au 5 juin 2025 » ne se lit plus comme 2026
+  const y = new Date().getFullYear();
+  const withY = D(du).getFullYear() !== y || D(au).getFullYear() !== y;
+  const M = new Intl.DateTimeFormat("fr-FR", withY ? {day: "numeric", month: "long", year: "numeric"} : {day: "numeric", month: "long"});
+  if (du === au) return "le " + M.format(D(du));
+  const j1 = du.slice(0, 7) === au.slice(0, 7) ? D(du).getDate() : M.format(D(du));
+  return `du ${j1} au ${M.format(D(au))}`;
+}
+
+function setSejour() {
+  // appelé par le bouton « Valider » uniquement : plus de bascule silencieuse au premier champ modifié
+  const du = $("sej-du").value, au = $("sej-au").value;
+  if (!okD(du) || !okD(au)) return;
+  sejourOn = true;
+  linkDatesKO = false;
+  apply(() => { state.du = du <= au ? du : au; state.au = du <= au ? au : du; });
+}
+
+// notoriété : mots génériques (château, abbaye…) seulement pour le bucket patrimoine — sinon
+// « Base ULM des châteaux » ou « Parc Mini-Châteaux » passent devant Beauval ; grands noms = bonus en plus
+const STARS = /beauval|chenonceau|clos.?luc|chaumont|cheverny|chambord|villandry|amboise/i;
+const PATRI = /clos.?luc|ch[âa]teau|forteresse|donjon|abbaye|cit[ée] royale|cath[ée]drale|domaine/i;
+const notable = e => (e.bucket === "patrimoine" && PATRI.test(e.label || "")) || /^(zoo|aquarium)|zooparc|base de loisirs/i.test(e.label || "");
+
+function renderSejour(pool) {
+  const today = todayISO();
+  let html = "";
+  const hasDates = !!(state.du && state.au);
+  const picker = `<div class="sej-dates" id="sej-picker"${hasDates ? " hidden" : ""}>
+      <label>Arrivée <input type="date" id="sej-du" value="${esc(state.du || "")}"></label>
+      <label>Départ <input type="date" id="sej-au" value="${esc(state.au || "")}"></label>
+      <button class="chip" onclick="setSejour()">Valider</button>
+    </div>`;
+  if (!hasDates) {
+    const partiel = linkDatesKO || state.du || state.au;
+    html += `<div class="hero"><h2>🏡 Votre séjour chez Alex</h2>
+      <p>${partiel
+        ? "Le lien reçu est incomplet ou ses dates sont illisibles — complétez ci-dessous pour afficher le programme jour par jour."
+        : "Indiquez vos dates : la page prépare les immanquables et des idées jour par jour autour de Saint-Georges-sur-Cher."}</p>${picker}</div>`;
+    return {html, status: partiel ? "complétez vos dates de séjour" : "choisissez vos dates de séjour"};
+  }
+  html += `<div class="hero"><h2>🏡 Séjour ${fmtRange(state.du, state.au)} — autour de chez Alex</h2>
+    <p>Bienvenue ! Pendant votre séjour à Saint-Georges-sur-Cher : les immanquables d’abord, puis des idées jour par jour. Horaires, prix et réservation : un coup d’œil au site officiel (lien sur la carte) avant de partir.</p>
+    <button class="edit" onclick="$('sej-picker').hidden=false;this.hidden=true">Modifier les dates</button>${picker}</div>`;
+
+  const wStart = state.du < today ? today : state.du;
+  const inWin = e => overlaps(e, state.du, state.au);
+  const perm = pool.filter(e => e.temporalite === "toujours");
+  // icônes d'abord : les grands noms écrasent la distance (sinon « le patrimoine le plus proche »
+  // gagne toujours et Cheverny/Chambord n'entrent jamais, même à rayon élargi)
+  // le bonus « grand nom » ne vaut que pour un site notable : « Verrerie d'Art d'Amboise » ou
+  // « Baignade du Grand Chambord » mentionnent une ville étoile sans être l'icône elle-même
+  const scoreI = e => (e.km ?? 40) + (e.photo ? 0 : 15) + (e.url ? 0 : 8) + (e.desc ? 0 : 3)
+                      + ((e.label || "").length > 42 ? 3 : 0)
+                      - (notable(e) ? 25 + (STARS.test(e.label || "") ? 50 : 0)
+                                         + (/beauval|chenonceau|chambord/i.test(e.label || "") ? 15 : 0) : 0);
+  const iS = new Map(perm.map(e => [e, scoreI(e)]));  // mémoïsé : plus de regex ×2 par comparaison de tri
+  const sortedP = perm.slice().sort((a, b) => iS.get(a) - iS.get(b));
+  // un seul représentant par « lieu » (mot notable + commune) : pas 3 cartes Beauval
+  const vKey = e => {
+    const m = (e.label || "").match(STARS) || (e.label || "").match(PATRI);
+    return norm(m ? m[0] : (e.label || "").slice(0, 14)) + "|" + norm(e.ville || "");
+  };
+  // un immanquable est un LIEU, pas une prestation : visites guidées, ateliers, locations
+  // de canoë/kayak et autres services restent dans les « idées à la journée »
+  const PRESTA = /^(visites?\s|atelier|animation|stage|initiation|balade|randonn|escape|d[ée]couverte|d[ée]gustation|croisi|location)|cano[eë]|kayak|paddle|\bspa\b/i;
+  const immq = [], seenKey = new Set();
+  let nPatri = 0;
+  for (const e of sortedP) {
+    // pas d'exemption « grand nom » ici : « Atelier soigneur à Beauval » ou « Location de canoës
+    // … vers Chenonceau » restent des prestations, pas des lieux
+    if (PRESTA.test(e.label || "")) continue;
+    const key = vKey(e);
+    if (seenKey.has(key)) continue;
+    if (e.bucket === "patrimoine" && nPatri >= 5) continue;  // de la place pour le zoo, la nature, les loisirs
+    seenKey.add(key); immq.push(e);
+    if (e.bucket === "patrimoine") nPatri++;
+    if (immq.length === 8) break;
+  }
+  for (const e of sortedP) {  // filet : compléter à 8 si le quota patrimoine a trop restreint
+    if (immq.length >= 8) break;
+    const key = vKey(e);
+    if (!seenKey.has(key)) { seenKey.add(key); immq.push(e); }
+  }
+
+  const D = s => new Date(s + "T12:00:00");
+  const days = [];
+  for (let d = D(wStart); iso(d) <= state.au && days.length < 60; d.setDate(d.getDate() + 1))
+    days.push(new Date(d));
+  const MAXD = 14;
+
+  // ancres de saut : « mon jour 1 » accessible sans 2,6 écrans de défilement
+  if (days.length > 1) {
+    const fmtA = new Intl.DateTimeFormat("fr-FR", {weekday: "short", day: "numeric"});
+    html += `<div class="chips anchors">` +
+      [["sec-immq", "⭐ Immanquables"], ...days.slice(0, MAXD).map(d => ["day-" + iso(d), fmtA.format(d)])]
+        .map(([id, l]) => `<button class="chip" onclick="goSec('${id}')">${l}</button>`).join("") + `</div>`;
+  }
+
+  if (immq.length)
+    html += `<div class="section-h" id="sec-immq"><h2>⭐ Les immanquables</h2><span class="n">${immq.length}</span></div>` +
+      immq.map(e => card(e, {noTempo: 1})).join("");
+
+  if (state.au < today) {
+    html += `<div class="empty">Ces dates sont passées — plus d’agenda jour par jour, mais les immanquables ci-dessus sont ouverts à l’année.</div>`;
+    return {html, status: `séjour passé · ${immq.length} immanquables · ${RING_LABEL[state.ring]}`};
+  }
+
+  const evAll = pool.filter(e => e.temporalite !== "toujours" && (e.temporalite === "ephemere" || e.periodes) && inWin(e));
+  // la « durée » qui compte est celle de la période chevauchant le séjour : une expo ou des
+  // soirées quotidiennes sur 3 semaines ne sont pas un rendez-vous daté — elles vont dans
+  // « En ce moment », sinon elles s'épinglent sur un jour arbitraire du séjour
+  const spanWin = e => {
+    if (e.periodes) {
+      const rel = e.periodes.filter(p => p.du <= state.au && (p.au || p.du) >= wStart);
+      return rel.length ? Math.max(...rel.map(p => (new Date(p.au || p.du) - new Date(p.du)) / 864e5)) : 0;
+    }
+    return span(e);
+  };
+  const shortEv = evAll.filter(e => spanWin(e) <= 3);
+  const longEv = evAll.filter(e => spanWin(e) > 3);
+  const recAll = pool.filter(e => e.temporalite === "recurrent" && !e.periodes && (e.jours || []).length && inWin(e));
+  // un « récurrent » ouvert 5 jours sur 7 ou plus (expo, guinguette permanente) n'est pas un
+  // rendez-vous daté : il rejoint « En ce moment » au lieu de squatter un créneau chaque jour
+  const recPool = recAll.filter(e => e.jours.length <= 4);
+  const moment = pool.filter(e => e.temporalite === "saisonnier" && !e.periodes && inWin(e))
+    .concat(longEv, recAll.filter(e => e.jours.length > 4))
+    .sort((a, b) => (a.km ?? 99) - (b.km ?? 99));
+
+  if (DATAMAX && state.du > DATAMAX)
+    html += `<div class="empty">⚠️ L’agenda des événements ne couvre pas encore ces dates (connu jusqu’au ${new Intl.DateTimeFormat("fr-FR", {day: "numeric", month: "long", year: "numeric"}).format(D(DATAMAX))}) — ci-dessous, surtout des lieux ouverts à l’année.</div>`;
+
+  // suggestions : le reste des permanents, entrelacé par catégorie — un jour ne propose pas 3 châteaux
+  const restP = sortedP.filter(e => !immq.includes(e));
+  const byB = {};
+  restP.forEach(e => (byB[e.bucket] = byB[e.bucket] || []).push(e));
+  const lanes = Object.values(byB);
+  const sugg = [];
+  for (let i = 0; sugg.length < restP.length; i++) lanes.forEach(l => { if (l[i]) sugg.push(l[i]); });
+  let sp = 0;  // curseur de rotation : jamais deux fois la même suggestion pendant le séjour
+  const thisY = new Date().getFullYear();
+  const fmtDay = new Intl.DateTimeFormat("fr-FR", {weekday: "long", day: "numeric", month: "long"});
+  const fmtDayY = new Intl.DateTimeFormat("fr-FR", {weekday: "long", day: "numeric", month: "long", year: "numeric"});
+  const DAYCAP = 4;
+  const seen = new Set();       // multi-jours éphémères : montrés à leur première date seulement
+  const venueShown = new Set(); // lieux déjà vus un jour précédent : pénalisés au tri, pas exclus
+  days.slice(0, MAXD).forEach(d => {
+    const dIso = iso(d), dow = (d.getDay() + 6) % 7;
+    // les hebdomadaires (marchés…) reviennent CHAQUE jour où ils ont lieu — jamais dans `seen`,
+    // et servis d'abord : plus jamais écrasés par 4 animations plus proches
+    const rec = recPool.filter(e => e.jours.includes(dow) && overlaps(e, dIso, dIso))
+      .sort((a, b) => (a.km ?? 99) - (b.km ?? 99));
+    const eps = shortEv.filter(e => !seen.has(e) && overlaps(e, dIso, dIso))
+      .sort((a, b) => ((venueShown.has(vKey(a)) ? 40 : 0) + (a.km ?? 99))
+                    - ((venueShown.has(vKey(b)) ? 40 : 0) + (b.km ?? 99)));
+    const total = rec.length + eps.length;
+    const picks = rec.slice(0, 2);
+    const dayKeys = new Set(picks.map(vKey));
+    for (const e of eps) {
+      if (picks.length >= DAYCAP) break;
+      const k = vKey(e);
+      if (dayKeys.has(k)) continue;  // pas 3 animations Chenonceau le même jour
+      dayKeys.add(k); picks.push(e);
+    }
+    for (const e of rec.slice(2)) { if (picks.length >= DAYCAP) break; picks.push(e); }
+    picks.forEach(e => { if (e.temporalite !== "recurrent") { seen.add(e); venueShown.add(vKey(e)); } });
+    const su = [];
+    while (su.length < (picks.length >= 3 ? 2 : 3) && sp < sugg.length) {
+      const e = sugg[sp++], key = vKey(e);
+      if (seenKey.has(key)) continue;  // lieu déjà proposé (immanquable ou jour précédent) : on varie
+      seenKey.add(key); su.push(e);
+    }
+    html += `<div class="day-h${dIso === today ? " today" : ""}" id="day-${dIso}"><h2>${dIso === today ? "Aujourd’hui — " : ""}${(d.getFullYear() === thisY ? fmtDay : fmtDayY).format(d)}</h2>` +
+      (total ? `<span class="n">${total} événement${total > 1 ? "s" : ""}</span>` : "") + `</div>`;
+    html += picks.map(e => card(e, {noTempo: 1, day: dIso})).join("");
+    if (total > picks.length)
+      html += `<div class="empty">+${total - picks.length} autres ce jour-là — le programme complet est dans l’onglet Agenda.</div>`;
+    if (su.length) html += `<div class="sub-h">💡 Idées à la journée</div>` + su.map(e => card(e, {noTempo: 1})).join("");
+    if (!picks.length && !su.length) html += `<div class="empty">Journée libre — piochez dans les immanquables.</div>`;
+  });
+
+  if (days.length > MAXD) {
+    // la suite du séjour, triée par prochaine occurrence RÉELLE (récurrents inclus : le 2e samedi a son marché)
+    const start = iso(days[MAXD]);
+    const nextOcc = e => {
+      if (e.temporalite === "recurrent") {
+        for (let i = 0, d = D(start); i < 60; i++, d.setDate(d.getDate() + 1)) {
+          const di = iso(d);
+          if (di > state.au) return null;
+          if (e.jours.includes((d.getDay() + 6) % 7) && overlaps(e, di, di)) return di;
+        }
+        return null;
+      }
+      if (e.periodes) {
+        const p = e.periodes.filter(p => p.du <= state.au && (p.au || p.du) >= start)
+          .sort((a, b) => (a.du < b.du ? -1 : 1))[0];
+        return p ? (p.du >= start ? p.du : start) : null;
+      }
+      return overlaps(e, start, state.au) ? (e.du && e.du >= start ? e.du : start) : null;
+    };
+    const rest = shortEv.filter(e => !seen.has(e)).concat(recPool)
+      .map(e => [e, nextOcc(e)]).filter(([, dd]) => dd)
+      .sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : (a[0].km ?? 99) - (b[0].km ?? 99)));
+    if (rest.length) {
+      const shown = rest.slice(0, PAGE * state.page);
+      html += `<div class="section-h"><h2>✨ La suite du séjour, par date</h2><span class="n">${rest.length}</span></div>` +
+        shown.map(([e, dd]) => card(e, {noTempo: 1, day: dd})).join("");
+      if (rest.length > shown.length)
+        html += `<button class="more" onclick="state.page++;render()">Voir plus (${rest.length - shown.length})</button>`;
+    }
+  }
+
+  if (moment.length) {
+    const open = state.open.sejs ? " open" : "";
+    const shownM = moment.slice(0, 24 * state.pageS);  // 24 par page : le DOM d'un invité 4G reste léger
+    const nTxt = shownM.length < moment.length ? `${shownM.length} sur ${moment.length}` : moment.length;
+    html += `<details id="d-sejsaison"${open}><summary>🍃 En ce moment pendant votre séjour <span class="n">(${nTxt})</span></summary>` +
+      shownM.map(e => card(e, {noTempo: 1, win: [wStart, state.au]})).join("");
+    if (moment.length > shownM.length)
+      html += `<button class="more" onclick="state.pageS++;render()">Voir plus (${moment.length - shownM.length})</button>`;
+    html += `</details>`;
+  }
+
+  // durée réelle du séjour depuis du/au — le plafond de 60 blocs jour ne fausse plus le décompte
+  const nJ = Math.round((D(state.au) - D(state.du)) / 864e5) + 1;
+  return {html, status: `${immq.length} immanquables · ${nJ} jour${nJ > 1 ? "s" : ""} de séjour · ${RING_LABEL[state.ring]}`};
+}
+
 function bindDetails() {
-  [["d-rec", "rec"], ["d-touj", "touj"], ["d-saison", "saison"], ["d-saisl", "saisl"], ["d-recsans", "recsans"]].forEach(([id, k]) => {
+  [["d-rec", "rec"], ["d-touj", "touj"], ["d-saison", "saison"], ["d-saisl", "saisl"], ["d-recsans", "recsans"], ["d-sejsaison", "sejs"]].forEach(([id, k]) => {
     const el = $(id);
     if (el) el.addEventListener("toggle", () => { state.open[k] = el.open; });
   });
@@ -581,43 +857,86 @@ function bindDetails() {
 
 function updateStatus(txt) {
   $("count").textContent = txt;
-  const dirty = state.quand !== "all" || state.ring !== 30 || state.tempo || state.cat || state.q ||
-                state.enfants || (state.view === "agenda" && state.jours.size);
+  // en Séjour : tempo/cat sont neutralisés et cachés (pas de « Réinitialiser » pour un filtre sans effet),
+  // et le rayon par défaut y est 45 (le lien d'invitation embrasse les grands sites)
+  const sej = state.view === "sejour";
+  const dirty = (!sej && state.quand !== "all") || state.ring !== (sej ? 45 : 30) || state.q ||
+                state.enfants || (!sej && (state.tempo || state.cat)) ||
+                (state.view === "agenda" && state.jours.size);
   $("btn-reset").hidden = !dirty;
 }
 
 function saveState() {
-  const s = {view: state.view, quand: state.quand, ring: state.ring, tempo: state.tempo,
-             cat: state.cat, q: state.q, jours: [...state.jours], enfants: state.enfants,
-             open: state.open, ts: Date.now()};
-  try { localStorage.setItem("sorties-filtres", JSON.stringify(s)); } catch (e) {}
+  // la vue Séjour n'écrit JAMAIS dans localStorage : ouvrir le lien d'un invité sur le téléphone
+  // d'Alex ne doit pas détruire ses réglages quotidiens (vue, filtres, distance)
+  if (state.view !== "sejour") {
+    const s = {view: state.view, quand: state.quand, ring: state.ring, tempo: state.tempo,
+               cat: state.cat, q: state.q, jours: [...state.jours], enfants: state.enfants,
+               open: state.open, ts: Date.now()};
+    try { localStorage.setItem("sorties-filtres", JSON.stringify(s)); } catch (e) {}
+  }
   const h = new URLSearchParams();
-  if (s.view !== "liste") h.set("v", s.view);
-  if (s.quand !== "all") h.set("w", s.quand);
-  if (s.ring !== 30) h.set("r", s.ring);
-  if (s.tempo) h.set("t", s.tempo);
-  if (s.cat) h.set("c", s.cat);
-  if (s.q) h.set("s", s.q);
-  if (s.jours.length) h.set("j", s.jours.join(","));
-  if (s.enfants) h.set("e", "1");
+  // avec des dates de séjour dans le hash, la vue doit être explicite : sinon un reload en Liste re-force Séjour
+  if (state.view !== "liste" || (sejourOn && state.du && state.au)) h.set("v", state.view);
+  if (state.quand !== "all") h.set("w", state.quand);
+  if (state.ring !== 30) h.set("r", state.ring);
+  if (state.tempo) h.set("t", state.tempo);
+  if (state.cat) h.set("c", state.cat);
+  if (state.q) h.set("s", state.q);
+  if (state.jours.size) h.set("j", [...state.jours].join(","));
+  if (state.enfants) h.set("e", "1");
+  // les dates de séjour voyagent dans le hash ; un usage sans séjour garde un hash strictement identique à avant
+  if (sejourOn && state.du && state.au) { h.set("du", state.du); h.set("au", state.au); }
   const hs = h.toString();
-  history.replaceState(null, "", hs ? "#" + hs : location.pathname + location.search);
+  // une fois les dates capturées dans le hash, la query ?du=&au= d'origine est retirée : plus de dates
+  // dupliquées dans l'URL, et quitter la vue Séjour (onglets Liste/Agenda) survit au rechargement
+  const dropQuery = sejourOn && state.du && state.au;
+  history.replaceState(null, "", hs ? location.pathname + (dropQuery ? "" : location.search) + "#" + hs
+                                    : location.pathname + location.search);
 }
 
 function loadState() {
+  // dates de séjour : en query (?du=&au= — le lien qu'envoie Alex) ou dans le hash (état partageable)
+  const qp = new URLSearchParams(location.search);
+  const duQ = qp.get("du"), auQ = qp.get("au");
+  if (okD(duQ)) state.du = duQ;
+  if (okD(auQ)) state.au = auQ;
+  // un lien tronqué (une seule date) ou aux dates invalides doit MONTRER la vue Séjour avec un
+  // message, pas retomber en silence sur le catalogue ni planter le rendu
+  if ((duQ && !okD(duQ)) || (auQ && !okD(auQ))) linkDatesKO = true;
   let s = null;
-  if (location.hash.length > 1) {
+  const fromHash = location.hash.length > 1;
+  if (fromHash) {
     const h = new URLSearchParams(location.hash.slice(1));
     s = {view: h.get("v"), quand: h.get("w"), ring: +h.get("r") || null, tempo: h.get("t"),
          cat: h.get("c"), q: h.get("s"), jours: h.get("j") ? h.get("j").split(",").map(Number) : null,
          enfants: h.get("e") === "1"};
+    if (okD(h.get("du"))) state.du = h.get("du");
+    if (okD(h.get("au"))) state.au = h.get("au");
   } else {
     try { s = JSON.parse(localStorage.getItem("sorties-filtres")); } catch (e) {}
     // filtres de plus de 12 h : on ne restaure que le durable (vue, distance, accordéons),
     // sinon un « ≤ 15 min + marchés » posé il y a 15 jours fait paraître la page vide
     if (s && (!s.ts || Date.now() - s.ts > 432e5)) s = {view: s.view, ring: s.ring, open: s.open};
   }
-  if (!s) return;
+  if (state.du && state.au && state.du > state.au) { const t = state.du; state.du = state.au; state.au = t; }
+  if (state.du || state.au || linkDatesKO) sejourOn = true;
+  // la vue Séjour ne se restaure jamais depuis localStorage : les habitués n'en voient rien
+  const resolveView = () => {
+    if (fromHash && s && s.view === "sejour") { state.view = "sejour"; sejourOn = true; }
+    else if (sejourOn && !(fromHash && s && ["liste", "agenda"].includes(s.view))) {
+      state.view = "sejour";
+      // arrivée par lien ?du=&au= : les filtres volatils restaurés du localStorage n'ont rien à y faire
+      // (sans risque pour les réglages d'Alex : la vue Séjour n'écrit jamais dans localStorage) ;
+      // un rayon résiduel trop court ne doit pas priver l'invité de Beauval ou d'Amboise
+      if (!fromHash) {
+        Object.assign(state, {quand: "all", tempo: null, cat: null, q: "", enfants: false});
+        state.jours = new Set();
+        if (state.ring < 45) state.ring = 45;
+      }
+    }
+  };
+  if (!s) { resolveView(); return; }
   if (["liste", "agenda"].includes(s.view)) state.view = s.view;
   if (["weekend", "all"].includes(s.quand)) state.quand = s.quand;
   if ([15, 30, 45, 60].includes(s.ring)) state.ring = s.ring;
@@ -629,6 +948,7 @@ function loadState() {
   if (Array.isArray(s.jours)) state.jours = new Set(s.jours.filter(n => Number.isInteger(n) && n >= 0 && n <= 6));
   if (s.open && typeof s.open === "object")
     for (const k in state.open) if (typeof s.open[k] === "boolean") state.open[k] = s.open[k];
+  resolveView();  // en dernier : son reset des filtres volatils ne doit pas être ré-écrasé
 }
 
 function render() {
@@ -636,8 +956,16 @@ function render() {
   const base = DATA.events.filter(e => e.temporalite === "toujours" || (e.au || e.du || "9999") >= today);
   renderChips(base);
   const pool = base.filter(e => matches(e));
-  const out = state.q ? renderSearch(pool)
-    : state.view === "liste" ? renderListe(pool) : renderAgenda(pool);
+  let out;
+  if (state.q) {
+    // en vue Séjour, la recherche reste cadrée sur la fenêtre du séjour — pas de retour au catalogue complet
+    const sej = state.view === "sejour" && state.du && state.au;
+    out = renderSearch(sej ? pool.filter(e => e.temporalite === "toujours" || overlaps(e, state.du, state.au)) : pool,
+                       sej ? "pendant votre séjour" : "");
+  } else {
+    out = state.view === "liste" ? renderListe(pool)
+      : state.view === "sejour" ? renderSejour(pool) : renderAgenda(pool);
+  }
   $("content").innerHTML = out.html;
   bindDetails();
   updateStatus(out.status);
@@ -646,13 +974,14 @@ function render() {
 
 $("vt-liste").onclick = () => apply(() => { state.view = "liste"; });
 $("vt-agenda").onclick = () => apply(() => { state.view = "agenda"; });
+$("vt-sejour").onclick = () => apply(() => { state.view = "sejour"; });
 $("btn-more").onclick = () => {
   state.more = !state.more;
   render();
   if (state.more) $("q").focus({preventScroll: true});
 };
 $("btn-reset").onclick = () => apply(() => {
-  Object.assign(state, {quand: "all", ring: 30, tempo: null, cat: null, q: "", enfants: false});
+  Object.assign(state, {quand: "all", ring: state.view === "sejour" ? 45 : 30, tempo: null, cat: null, q: "", enfants: false});
   state.jours = new Set();
   $("q").value = "";
 });
@@ -671,15 +1000,30 @@ window.addEventListener("resize", () => document.querySelectorAll(".chips").forE
 loadState();
 $("q").value = state.q;
 
-fetch("data.json").then(r => r.json()).then(d => {
+// le catch ne couvre QUE le chargement réseau : une erreur de rendu ne doit plus s'afficher
+// « Impossible de charger les données » (diagnostic mensonger, boucle Réessayer sans issue)
+fetch("data.json").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(d => {
   DATA = d;
+  // horizon réel de l'agenda : 95e percentile des dates de fin (le max naïf serait faussé
+  // par une poignée d'événements aux dates aberrantes à plusieurs années)
+  const ends = d.events.filter(e => e.temporalite !== "toujours")
+    .map(e => e.periodes ? e.periodes.reduce((x, p) => ((p.au || p.du) > x ? (p.au || p.du) : x), "")
+                         : (e.au || e.du || ""))
+    .filter(Boolean).sort();
+  DATAMAX = ends.length ? ends[Math.floor(ends.length * 0.95)] || ends[ends.length - 1] : "";
   const [y, m, dd] = d.generated.split("-");
   $("updated").textContent = `Saint-Georges-sur-Cher · maj ${+dd}/${+m}/${y}`;
-  render();
 }).catch(() => {
   $("updated").textContent = "Impossible de charger data.json";
   $("content").innerHTML = `<div class="empty">Impossible de charger les données — vérifie la connexion.</div>
     <button class="more" onclick="location.reload()">Réessayer</button>`;
+}).then(() => {
+  if (!DATA) return;
+  try { render(); } catch (err) {
+    console.error(err);
+    $("content").innerHTML = `<div class="empty">Oups, un souci d’affichage avec ces réglages.</div>
+      <button class="more" onclick="try{localStorage.removeItem('sorties-filtres')}catch(e){};location.replace(location.pathname)">Repartir de zéro</button>`;
+  }
 });
 </script>
 </body>
