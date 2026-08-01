@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorties — vallée du Cher</title>
+<style>
+  :root {
+    --bg: #faf7f2; --card: #ffffff; --ink: #2b2620; --muted: #8a7f6f;
+    --accent: #9a5b2d; --accent-soft: #f3e5d8; --chip: #efe9df; --chip-on: #2b2620;
+    --shadow: 0 1px 3px rgba(43,38,32,.08), 0 4px 14px rgba(43,38,32,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191512; --card: #241f1a; --ink: #ede6da; --muted: #9c9081;
+      --accent: #d99a5b; --accent-soft: #3a2d20; --chip: #322b23; --chip-on: #ede6da;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 16px 14px 60px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  header h1 { font-size: 1.3rem; letter-spacing: -.01em; }
+  header p { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+  .viewtoggle { display: flex; border-radius: 999px; background: var(--chip); padding: 3px; flex: 0 0 auto; }
+  .viewtoggle button { border: 0; background: transparent; color: var(--ink); font-size: .82rem; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .viewtoggle button.on { background: var(--chip-on); color: var(--bg); font-weight: 600; }
+
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips + .chips { padding-top: 0; }
+  .chip {
+    flex: 0 0 auto; border: 0; border-radius: 999px; padding: 7px 13px;
+    background: var(--chip); color: var(--ink); font-size: .84rem; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .chip.on { background: var(--chip-on); color: var(--bg); font-weight: 600; }
+  .chip.day { padding: 7px 11px; }
+  .filters { position: sticky; top: 0; background: var(--bg); padding: 10px 0 6px; z-index: 5; }
+
+  .section-h { display: flex; align-items: baseline; gap: 8px; margin: 22px 0 10px; }
+  .section-h h2 { font-size: 1.05rem; }
+  .section-h .n { color: var(--muted); font-size: .8rem; }
+  .empty { color: var(--muted); font-size: .9rem; padding: 12px 0; }
+
+  .card {
+    display: flex; gap: 12px; background: var(--card); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 10px; margin-bottom: 10px; overflow: hidden;
+  }
+  .card img, .card .ph {
+    width: 92px; height: 92px; flex: 0 0 92px; border-radius: 10px; object-fit: cover;
+    background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+  }
+  .card .body { min-width: 0; flex: 1; }
+  .card h3 { font-size: .95rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { color: var(--muted); font-size: .8rem; margin: 3px 0 4px; }
+  .meta b { color: var(--accent); font-weight: 600; }
+  .desc { font-size: .82rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .links { margin-top: 6px; display: flex; gap: 10px; }
+  .links a { color: var(--accent); font-size: .8rem; text-decoration: none; font-weight: 600; padding: 4px 0; }
+  .tag { display: inline-block; font-size: .68rem; background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+
+  .day-h { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent-soft); }
+  .day-h h2 { font-size: .98rem; text-transform: capitalize; }
+  .day-h.today h2 { color: var(--accent); }
+  .day-h .n { color: var(--muted); font-size: .78rem; }
+
+  details { margin-top: 26px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; padding: 6px 0; }
+  summary .n { color: var(--muted); font-weight: 400; font-size: .8rem; }
+  .more { width: 100%; border: 0; background: var(--chip); color: var(--ink); border-radius: 10px; padding: 11px; font-size: .88rem; cursor: pointer; margin-top: 2px; }
+  footer { margin-top: 34px; color: var(--muted); font-size: .75rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Sorties — vallée du Cher</h1>
+      <p id="updated">chargement…</p>
+    </div>
+    <div class="viewtoggle">
+      <button id="vt-liste">Liste</button>
+      <button id="vt-agenda">Agenda</button>
+    </div>
+  </header>
+
+  <div class="filters">
+    <div class="chips" id="chips-quand"></div>
+    <div class="chips" id="chips-ring"></div>
+    <div class="chips" id="chips-tempo"></div>
+    <div class="chips" id="chips-cat"></div>
+    <div class="chips" id="chips-jours" style="display:none"></div>
+  </div>
+
+  <div id="content"></div>
+
+  <footer>
+    Données <a href="https://www.datatourisme.fr" style="color:inherit">DATAtourisme</a> — horaires à vérifier sur le site officiel avant de partir.
+  </footer>
+</div>
+
+<script>
+const RING_LABEL = {15: "≤ 15 min", 30: "≤ 30 min", 45: "≤ 45 min", 60: "≤ 1 h"};
+const TEMPO = [["ephemere", "⚡ Éphémère"], ["saisonnier", "🍃 Saisonnier"], ["recurrent", "🔁 Récurrent"], ["toujours", "🏛️ Toute l’année"]];
+const EMOJI = {marches: "🧺", concerts: "🎶", expos: "🖼️", sport: "🚵", patrimoine: "🏰", nature: "🌳", autres: "✨"};
+const TEMPO_TAG = {saisonnier: "saison", recurrent: "récurrent", toujours: "à l’année"};
+const JOUR_LETTRE = ["L", "M", "M", "J", "V", "S", "D"];
+const state = { view: "liste", quand: "all", ring: 30, tempo: null, cat: null, jours: new Set(), page: 1 };
+let DATA = null;
+
+const $ = id => document.getElementById(id);
+const iso = d => d.toISOString().slice(0, 10);
+const todayISO = () => iso(new Date());
+
+function weekendWindow() {
+  const now = new Date(), day = now.getDay();
+  if (day === 0) return [iso(now), iso(now)];
+  const sat = new Date(now); sat.setDate(now.getDate() + (6 - day));
+  const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
+  return [iso(day === 6 ? now : sat), iso(sun)];
+}
+const overlaps = (e, from, to) => (e.du || "0000") <= to && (e.au || e.du || "9999") >= from;
+
+function fmtDates(e) {
+  const f = s => { const [y, m, d] = s.split("-"); return `${+d}/${+m}`; };
+  if (!e.du) return "";
+  if (e.du === e.au || !e.au) return f(e.du);
+  return `${f(e.du)} → ${f(e.au)}`;
+}
+
+function card(e, opts = {}) {
+  const img = e.photo
+    ? `<img src="${e.photo}" loading="lazy" width="92" height="92" alt=""
+         onerror="this.outerHTML='<div class=ph>${EMOJI[e.bucket] || "✨"}</div>'">`
+    : `<div class="ph">${EMOJI[e.bucket] || "✨"}</div>`;
+  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((e.label || "") + " " + (e.ville || ""))}`;
+  const tags = (e.enfants ? '<span class="tag">enfants</span>' : "") +
+    (!opts.noTempo && TEMPO_TAG[e.temporalite] ? `<span class="tag">${TEMPO_TAG[e.temporalite]}</span>` : "");
+  const jours = e.jours && e.jours.length && e.temporalite === "recurrent"
+    ? ` · ${e.jours.map(j => ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"][j]).join(", ")}` : "";
+  return `<div class="card">
+    ${img}
+    <div class="body">
+      <h3>${e.label || ""}${tags}</h3>
+      <div class="meta"><b>${e.ville || ""}</b> · ${RING_LABEL[e.ring]} ${e.km ? `(${e.km} km)` : ""}${e.du ? " · " + fmtDates(e) : ""}${jours}</div>
+      <div class="desc">${e.desc || ""}</div>
+      <div class="links">
+        ${e.url ? `<a href="${e.url}" target="_blank" rel="noopener">Site ↗</a>` : ""}
+        <a href="${maps}" target="_blank" rel="noopener">Itinéraire ↗</a>
+      </div>
+    </div>
+  </div>`;
+}
+
+function chip(label, on, cb, cls = "") {
+  const b = document.createElement("button");
+  b.className = "chip " + cls + (on ? " on" : "");
+  b.textContent = label;
+  b.onclick = cb;
+  return b;
+}
+
+function renderChips() {
+  $("vt-liste").className = state.view === "liste" ? "on" : "";
+  $("vt-agenda").className = state.view === "agenda" ? "on" : "";
+  $("chips-quand").style.display = state.view === "liste" ? "" : "none";
+  $("chips-jours").style.display = state.view === "agenda" ? "" : "none";
+
+  const q = $("chips-quand"); q.replaceChildren();
+  [["weekend", "Ce week-end"], ["all", "Tout"]].forEach(([k, l]) =>
+    q.append(chip(l, state.quand === k, () => { state.quand = k; state.page = 1; render(); })));
+
+  const r = $("chips-ring"); r.replaceChildren();
+  [15, 30, 45, 60].forEach(k =>
+    r.append(chip(RING_LABEL[k], state.ring === k, () => { state.ring = k; state.page = 1; render(); })));
+
+  const t = $("chips-tempo"); t.replaceChildren();
+  t.append(chip("Tout", !state.tempo, () => { state.tempo = null; state.page = 1; render(); }));
+  TEMPO.forEach(([k, l]) =>
+    t.append(chip(l, state.tempo === k, () => { state.tempo = state.tempo === k ? null : k; state.page = 1; render(); })));
+
+  const c = $("chips-cat"); c.replaceChildren();
+  c.append(chip("Tout", !state.cat, () => { state.cat = null; state.page = 1; render(); }));
+  DATA.buckets.forEach(b =>
+    c.append(chip(`${EMOJI[b.key] || ""} ${b.label}`, state.cat === b.key, () => {
+      state.cat = state.cat === b.key ? null : b.key; state.page = 1; render();
+    })));
+  c.append(chip("👧 Avec enfants", state.cat === "_enfants", () => {
+    state.cat = state.cat === "_enfants" ? null : "_enfants"; state.page = 1; render();
+  }));
+
+  const j = $("chips-jours"); j.replaceChildren();
+  ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].forEach((l, i) =>
+    j.append(chip(l, state.jours.has(i), () => {
+      state.jours.has(i) ? state.jours.delete(i) : state.jours.add(i);
+      render();
+    }, "day")));
+}
+
+function matches(e) {
+  if (e.ring > state.ring) return false;
+  if (state.tempo && e.temporalite !== state.tempo) return false;
+  if (state.cat === "_enfants") { if (!e.enfants) return false; }
+  else if (state.cat && e.bucket !== state.cat) return false;
+  return true;
+}
+
+const PAGE = 40;
+const span = e => (!e.du || !e.au) ? 999 : (new Date(e.au) - new Date(e.du)) / 864e5;
+
+function renderListe(pool) {
+  const [ws, we] = weekendWindow();
+  const dated = pool.filter(e => e.temporalite !== "toujours");
+  const toujours = pool.filter(e => e.temporalite === "toujours");
+  const actifs = state.quand === "weekend" ? dated.filter(e => overlaps(e, ws, we)) : dated;
+
+  const wkd = actifs.filter(e => overlaps(e, ws, we) && e.temporalite !== "recurrent")
+    .sort((a, b) => span(a) - span(b) || (a.km || 99) - (b.km || 99));
+  const up = state.quand === "weekend" ? [] : actifs.filter(e => !overlaps(e, ws, we) && e.temporalite !== "recurrent");
+  const rec = actifs.filter(e => e.temporalite === "recurrent");
+
+  let html = "";
+  if (state.tempo !== "toujours" && state.tempo !== "recurrent") {
+    html += `<div class="section-h"><h2>🗓️ Ce week-end</h2><span class="n">${wkd.length}</span></div>` +
+      (wkd.length ? wkd.map(e => card(e)).join("") : `<div class="empty">Rien avec ces filtres — élargis la distance ou la catégorie.</div>`);
+    const shown = up.slice(0, PAGE * state.page);
+    if (up.length) {
+      html += `<div class="section-h"><h2>📅 À venir</h2><span class="n">${up.length}</span></div>` + shown.map(e => card(e)).join("");
+      if (up.length > shown.length) html += `<button class="more" onclick="state.page++;render()">Voir plus (${up.length - shown.length})</button>`;
+    }
+  }
+  if (rec.length && state.tempo !== "toujours") {
+    const open = state.tempo === "recurrent" ? " open" : "";
+    html += `<details${open}><summary>🔁 Marchés &amp; rendez-vous réguliers <span class="n">(${rec.length})</span></summary>` +
+      rec.map(e => card(e, {noTempo: 1})).join("") + `</details>`;
+  }
+  if (toujours.length) {
+    const open = state.tempo === "toujours" ? " open" : "";
+    const sorted = toujours.slice().sort((a, b) => (a.km || 99) - (b.km || 99));
+    const shownT = state.tempo === "toujours" ? sorted.slice(0, PAGE * state.page) : sorted.slice(0, 60);
+    html += `<details${open}><summary>🏛️ À faire toute l’année <span class="n">(${toujours.length})</span></summary>` +
+      shownT.map(e => card(e, {noTempo: 1})).join("");
+    if (state.tempo === "toujours" && sorted.length > shownT.length)
+      html += `<button class="more" onclick="state.page++;render()">Voir plus (${sorted.length - shownT.length})</button>`;
+    html += `</details>`;
+  }
+  return html;
+}
+
+function renderAgenda(pool) {
+  const dated = pool.filter(e => e.temporalite === "ephemere");
+  const recs = pool.filter(e => e.temporalite === "recurrent" && e.jours.length);
+  const saison = pool.filter(e => e.temporalite === "saisonnier");
+  const horizon = (DATA.window_weeks || 3) * 7;
+  const fmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+
+  let html = "";
+  let shownDays = 0;
+  for (let i = 0; i < horizon; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const dow = (d.getDay() + 6) % 7; // 0 = lundi
+    if (state.jours.size && !state.jours.has(dow)) continue;
+    const dIso = iso(d);
+    const evts = dated.filter(e => overlaps(e, dIso, dIso))
+      .concat(recs.filter(e => e.jours.includes(dow) && overlaps(e, dIso, dIso)))
+      .sort((a, b) => (a.km || 99) - (b.km || 99));
+    if (!evts.length) continue;
+    shownDays++;
+    html += `<div class="day-h${i === 0 ? " today" : ""}"><h2>${i === 0 ? "Aujourd’hui — " : i === 1 ? "Demain — " : ""}${fmt.format(d)}</h2><span class="n">${evts.length}</span></div>` +
+      evts.map(e => card(e, {noTempo: 1})).join("");
+  }
+  if (!shownDays) html += `<div class="empty">Rien sur ces jours avec ces filtres.</div>`;
+
+  if (saison.length && !state.tempo) {
+    html += `<details><summary>🍃 En ce moment (expos, animations de saison) <span class="n">(${saison.length})</span></summary>` +
+      saison.slice(0, 60).map(e => card(e, {noTempo: 1})).join("") + `</details>`;
+  }
+  return html;
+}
+
+function render() {
+  renderChips();
+  const today = todayISO();
+  const pool = DATA.events.filter(matches)
+    .filter(e => e.temporalite === "toujours" || (e.au || e.du || "9999") >= today);
+  $("content").innerHTML = state.view === "liste" ? renderListe(pool) : renderAgenda(pool);
+}
+
+$("vt-liste").onclick = () => { state.view = "liste"; state.page = 1; render(); };
+$("vt-agenda").onclick = () => { state.view = "agenda"; render(); };
+
+fetch("data.json").then(r => r.json()).then(d => {
+  DATA = d;
+  const [y, m, dd] = d.generated.split("-");
+  $("updated").textContent = `Saint-Georges-sur-Cher · mis à jour le ${+dd}/${+m}/${y}`;
+  render();
+}).catch(() => { $("updated").textContent = "Impossible de charger data.json"; });
+</script>
+</body>
+</html>
