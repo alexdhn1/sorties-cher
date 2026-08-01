@@ -14,8 +14,10 @@ Temporalités :
 
 import datetime
 import json
+import math
 import os
 import re
+import statistics
 import subprocess
 import sys
 import unicodedata
@@ -83,6 +85,38 @@ RE_RESERV = re.compile(r"sur r[ée]servation|r[ée]servation (obligatoire|consei
 PERMANENT_TYPES = ("Castle,Museum,ParkAndGarden,NaturalHeritage,ZooAnimalPark,ThemePark,"
                    "SportsAndLeisurePlace,Cave,TroglodyteVillage,Abbey,ArcheologicalSite,WineCellar")
 
+# Repli ville→km quand aucune entrée DATAtourisme ne donne la distance (communes
+# proches des sources mairies) : haversine depuis la maison, clés normalisées norm_key.
+MAISON = (47.3075, 1.1413)
+COMMUNES_GPS = {
+    "saintgeorgessurcher": (47.3086, 1.1256), "montrichard": (47.3431, 1.1867),
+    "faverollessurcher": (47.3260, 1.1859), "bourre": (47.3475, 1.2186),
+    "chissayentouraine": (47.3383, 1.1329), "saintjuliendechedon": (47.3253, 1.2233),
+    "ange": (47.3157, 1.2419), "pouille": (47.3103, 1.3006), "thesee": (47.3236, 1.3084),
+    "monthousurcher": (47.3487, 1.2848), "pontlevoy": (47.3903, 1.2547),
+    "chenonceaux": (47.3336, 1.0654), "chisseaux": (47.3390, 1.0800),
+    "civraydetouraine": (47.3320, 1.0500), "blere": (47.3268, 0.9910),
+    "cerelaronde": (47.2620, 1.0910), "valliereslesgrandes": (47.4031, 1.1153),
+    "saintaignan": (47.2690, 1.3760),
+}
+# Nom d'affichage par clé normalisée — sert à résoudre la commune réelle depuis le
+# LOCATION iCal (« Stade de foot de Bourré » ⇒ Bourré, pas Montrichard).
+COMMUNES_NOMS = {
+    "saintgeorgessurcher": "Saint-Georges-sur-Cher", "montrichard": "Montrichard",
+    "faverollessurcher": "Faverolles-sur-Cher", "bourre": "Bourré",
+    "chissayentouraine": "Chissay-en-Touraine", "saintjuliendechedon": "Saint-Julien-de-Chédon",
+    "ange": "Angé", "pouille": "Pouillé", "thesee": "Thésée",
+    "monthousurcher": "Monthou-sur-Cher", "pontlevoy": "Pontlevoy",
+    "chenonceaux": "Chenonceaux", "chisseaux": "Chisseaux",
+    "civraydetouraine": "Civray-de-Touraine", "blere": "Bléré",
+    "cerelaronde": "Céré-la-Ronde", "valliereslesgrandes": "Vallières-les-Grandes",
+    "saintaignan": "Saint-Aignan",
+}
+# Correctif « vol d'oiseau → minutes de route » : communes séparées de la maison par
+# le Cher ou la forêt (détour obligé) ⇒ ≥ 20 min de route malgré ≤ 13 km haversine.
+RING_MIN = {"cerelaronde": 30, "blere": 30, "monthousurcher": 30,
+            "pouille": 30, "thesee": 30, "pontlevoy": 30}
+
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 RE_RECURRENT = re.compile(r"\b(tous les|chaque|hebdomadaire|toutes les semaines|1er \w+ du mois|"
                           r"premier \w+ du mois|mensuel)\b", re.I)
@@ -102,6 +136,15 @@ def bucket_of(types, label="", desc=""):
     return "autres"
 
 
+def commune_km(ville):
+    gps = COMMUNES_GPS.get(norm_key((ville or "").replace(" Val de Cher", "")))
+    if not gps:
+        return None
+    la1, lo1, la2, lo2 = map(math.radians, (*MAISON, *gps))
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return round(2 * 6371 * math.asin(math.sqrt(h)), 1)
+
+
 def ring_of(km):
     if km is None:
         return 60
@@ -114,6 +157,40 @@ def norm_key(s):
     s = "".join(c for c in s if not unicodedata.combining(c)).lower()
     s = re.sub(r"\b(sarl|sas|eurl)\b", "", s)
     return re.sub(r"[^a-z0-9]+", "", s)
+
+
+def norm_spaced(s):
+    """Comme norm_key mais mots séparés par des espaces (recherche à frontière de mot)."""
+    s = unicodedata.normalize("NFD", s or "")
+    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+# motifs « nom de commune » pré-normalisés, à frontière de mot
+_COMMUNES_PAT = {k: f" {norm_spaced(nom)} " for k, nom in COMMUNES_NOMS.items()}
+
+
+def ville_from_lieu(lieu, ville):
+    """Commune détectée dans le LOCATION iCal, prioritaire sur la commune de la source :
+    « Centre Socio Culturel Bourré » publié par Montrichard est à Bourré (~3 km plus loin)."""
+    if not lieu:
+        return None
+    hay = f" {norm_spaced(lieu)} "
+    nv = norm_key(ville)
+    for key, pat in _COMMUNES_PAT.items():
+        if key != nv and pat in hay:
+            return COMMUNES_NOMS[key]
+    return None
+
+
+STOPWORDS = {"les", "des", "une", "aux", "sur", "dans", "pour", "avec", "par",
+             "chez", "est", "ses", "son", "the", "and"}
+
+
+def label_tokens(s):
+    """Tokens significatifs d'un libellé (quasi-doublons : « Concert Rock on the Dock »
+    vs « Rock on the dock débarque à Montrichard »)."""
+    return {t for t in norm_spaced(s).split() if len(t) >= 3 and t not in STOPWORDS}
 
 
 def jours_occurrences(periodes):
@@ -219,11 +296,38 @@ def load_extras():
     return out
 
 
+def load_sources_events():
+    """Événements structurés des sources locales : sources/collected.json (iCal/RSS
+    de fetch_sources.py) et sources/scraped.json (validés par la tâche hebdo).
+    Même format que data.json + champ "source" ("mairie:<commune>", "facebook:<page>")."""
+    out = []
+    for fname in ("collected.json", "scraped.json"):
+        path = os.path.join(HERE, "sources", fname)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"sources/{fname} illisible ({e}) — ignoré", file=sys.stderr)
+            continue
+        if isinstance(data, dict) and data.get("errors"):
+            for err in data["errors"]:
+                sup = f" ({err['reprise_cache']})" if err.get("reprise_cache") else ""
+                print(f"⚠ sources/{fname}: collecte dégradée — {err.get('source', '?')}: "
+                      f"{err.get('erreur', '?')}{sup}", file=sys.stderr)
+        events = data.get("events", []) if isinstance(data, dict) else data
+        for ev in events or []:
+            if isinstance(ev, dict) and ev.get("label"):
+                out.append(ev)
+    return out
+
+
 def main():
     today = datetime.date.today()
     seen, items, rejected = set(), [], [0]
 
-    def add(o, temporalite=None, jours=None, permanent=False):
+    def add(o, temporalite=None, jours=None, permanent=False, source=None):
         label = (o.get("label") or "").strip()
         ville = ((o.get("ville") or "").replace(" Val de Cher", "")).strip()
         # scories : caractères invisibles, espaces doublés, guillemets encadrants, raisons sociales
@@ -251,6 +355,10 @@ def main():
         if label.isupper():
             label = label.capitalize()
         du, au = o.get("du"), o.get("au") or o.get("du")
+        # filtre anti-passé : s'applique AUSSI aux sources locales qui déclarent leur
+        # propre temporalite (sinon un scraped.json périmé republierait l'événement)
+        if temporalite != "toujours" and au and au < today.isoformat():
+            return
         # occurrences futures, dédupliquées sur (du, au) — la source répète souvent la même période
         periodes_fut, seen_p = [], set()
         for p in o.get("periodes") or []:
@@ -260,18 +368,25 @@ def main():
             seen_p.add((p["du"], pau))
             periodes_fut.append({"du": p["du"], "au": pau})
         if temporalite is None:
-            if au and au < today.isoformat():
-                return
             # temporalité calculée sur l'ENVELOPPE des occurrences, pas la seule période courante
             env_du, env_au = du, au
             if periodes_fut:
                 env_du = min(p["du"] for p in periodes_fut)
                 env_au = max(p["au"] for p in periodes_fut)
             temporalite, jours = temporalite_of(env_du, env_au, label, o.get("desc"), o.get("jours_ouv"))
-            if (temporalite != "toujours" and len(periodes_fut) >= 3 and env_du
-                    and (datetime.date.fromisoformat(env_au)
-                         - datetime.date.fromisoformat(env_du)).days > 21):
-                temporalite = "recurrent"
+            if temporalite != "toujours" and len(periodes_fut) >= 3 and env_du:
+                span_env = (datetime.date.fromisoformat(env_au)
+                            - datetime.date.fromisoformat(env_du)).days
+                if span_env > 21:
+                    if span_env / len(periodes_fut) <= 14:
+                        # rythme ~hebdomadaire ou mieux → vrai rendez-vous régulier
+                        temporalite = "recurrent"
+                    elif all((datetime.date.fromisoformat(p["au"])
+                              - datetime.date.fromisoformat(p["du"])).days <= 3
+                             for p in periodes_fut):
+                        # dates courtes ESPACÉES (collecte de sang mensuelle…) :
+                        # occurrences ponctuelles, pas « chaque semaine »
+                        temporalite = "ephemere"
             if temporalite == "recurrent" and not jours:
                 jours = jours_occurrences(periodes_fut)
         desc = clip(o.get("desc"))
@@ -298,7 +413,8 @@ def main():
             "label": label,
             "ville": ville,
             "km": o.get("km"),
-            "ring": ring_of(o.get("km")),
+            # ring : minutes de route réelles ≥ estimation vol d'oiseau (RING_MIN)
+            "ring": max(ring_of(o.get("km")), RING_MIN.get(norm_key(ville), 0)),
             "du": du, "au": au,
             "periodes": periodes,
             "temporalite": temporalite,
@@ -311,6 +427,7 @@ def main():
             "pratique": " · ".join(x for x in (o.get("h"), prix) if x) or None,
             "url": o.get("url"),
             "photo": photo,
+            "source": source,
         }
         # ne pas émettre les champs vides (jours/enfants gérés côté JS) — ~50 Ko économisés
         items.append({k: v for k, v in item.items()
@@ -331,7 +448,75 @@ def main():
                                     "hasContact,hasMainRepresentation,offers"]):
         add(o, temporalite="toujours", jours=[], permanent=True)
 
-    # 3. Ajouts manuels
+    # 3. Sources locales (mairies via fetch_sources.py, Facebook validé par la tâche hebdo).
+    # Passées APRÈS DATAtourisme : en cas de doublon (norm label × ville), DATAtourisme
+    # gagne — ses fiches sont plus riches (photo, prix, géoloc précise).
+    # km : médiane DATAtourisme par ville normalisée, repli haversine COMMUNES_GPS.
+    km_by_ville = {}
+    for e in items:
+        if e.get("km") is not None and e.get("ville"):
+            km_by_ville.setdefault(norm_key(e["ville"]), []).append(e["km"])
+    km_by_ville = {v: round(statistics.median(kms), 1) for v, kms in km_by_ville.items()}
+    # Même label × ville à plusieurs dates (« Collecte de sang » mensuelle…) : fusion
+    # en une entrée à periodes multiples AVANT add(), sinon la dédup ne garde que la 1re.
+    grouped = {}
+    for o in load_sources_events():
+        key = (norm_key(o.get("label") or ""),
+               norm_key((o.get("ville") or "").replace(" Val de Cher", "")))
+        g = grouped.get(key)
+        if g and g.get("du") and o.get("du"):
+            g.setdefault("periodes", [{"du": g["du"], "au": g.get("au") or g["du"]}])
+            g["periodes"].append({"du": o["du"], "au": o.get("au") or o["du"]})
+            g["du"] = min(p["du"] for p in g["periodes"])
+            g["au"] = max(p["au"] for p in g["periodes"])
+            # champs propres à UNE occurrence (« Mercredi 2 septembre ⏰ 15h ») :
+            # contradictoires une fois fusionnés → supprimés s'ils diffèrent
+            for f in ("desc", "h"):
+                if g.get(f) != o.get(f):
+                    g.pop(f, None)
+        else:
+            grouped[key] = o
+    n_src = 0
+    for o in grouped.values():
+        ville = (o.get("ville") or "").replace(" Val de Cher", "").strip()
+        if norm_key(ville) == "interco":
+            ville = ""  # pas une commune : ni « interco » affiché, ni km inventé
+        # commune réelle depuis le LOCATION iCal (communes déléguées : Bourré…)
+        v2 = ville_from_lieu(o.get("lieu"), ville)
+        if v2:
+            ville = v2
+        o["ville"] = ville
+        if o.get("km") is None and ville:
+            o["km"] = km_by_ville.get(norm_key(ville))
+            if o["km"] is None:
+                o["km"] = commune_km(ville)
+        # quasi-doublons intra-source ou mairie↔DATAtourisme : même ville, dates qui se
+        # recouvrent, libellés partageant l'essentiel de leurs tokens → on garde le 1er
+        t1 = label_tokens(o.get("label")) - label_tokens(ville)
+        du1, au1 = o.get("du"), o.get("au") or o.get("du")
+        dup = None
+        if t1 and du1:
+            nv = norm_key(ville)
+            for e in items:
+                if not e.get("du") or norm_key(e.get("ville") or "") != nv:
+                    continue
+                if (e.get("au") or e["du"]) < du1 or e["du"] > au1:
+                    continue
+                t2 = label_tokens(e["label"]) - label_tokens(ville)
+                inter = t1 & t2
+                if len(inter) >= 2 and len(inter) >= 0.6 * min(len(t1), len(t2)):
+                    dup = e["label"]
+                    break
+        if dup:
+            print(f"quasi-doublon ignoré : « {o.get('label')} » ≈ « {dup} »", file=sys.stderr)
+            continue
+        before = len(items)
+        add(o, temporalite=o.get("temporalite"), jours=o.get("jours"),
+            source=str(o.get("source") or "manuel"))
+        n_src += len(items) - before
+    print(f"sources locales : {n_src} événements ajoutés", file=sys.stderr)
+
+    # 4. Ajouts manuels
     for e in load_extras():
         if (e.get("au") or "") >= today.isoformat():
             e["ring"] = ring_of(e.get("km"))
@@ -347,9 +532,23 @@ def main():
             del e["desc"]
 
     items.sort(key=lambda e: (e.get("du") or "9999", e.get("km") or 99))
+    # horizon réel de l'agenda : les sources locales (iCal mairie) portent des dates
+    # bien au-delà des WEEKS semaines DATAtourisme — la vue Agenda doit les couvrir
+    horizon_end = today + datetime.timedelta(days=WEEKS * 7)
+    for e in items:
+        if e.get("temporalite") == "toujours":
+            continue
+        fins = [p["au"] for p in e.get("periodes") or []]
+        if not fins and e.get("temporalite") == "ephemere" and e.get("au"):
+            fins = [e["au"]]
+        for fin in fins:
+            d = datetime.date.fromisoformat(fin)
+            if d > horizon_end:
+                horizon_end = d
     data = {
         "generated": today.isoformat(),
         "window_weeks": WEEKS,
+        "horizon_jours": min((horizon_end - today).days + 1, 180),
         "buckets": [{"key": k, "label": l} for k, l, _ in BUCKETS] + [{"key": "autres", "label": "Visites & autres"}],
         "events": items,
     }

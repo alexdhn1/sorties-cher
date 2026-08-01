@@ -1,2 +1,5 @@
 __pycache__/
 .DS_Store
+# artefacts de collecte (régénérés par fetch_sources.py)
+sources/collected.json
+sources/cache/

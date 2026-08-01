@@ -1,6 +1,7 @@
 # Sources municipales vérifiées (recensement 2026-08-01) — lues par la tâche hebdo.
 # priorite: 1 = brancher d'abord (rendement), 2 = complément, 3 = appoint faible rendement.
-# mode: rss = flux exploitable directement ; html = extraction sur la page ; rss-js = RSS ok mais pages JS.
+# mode: ical = flux iCal structuré (prioritaire : dès qu'une clé 'ical' existe, rss/url sont ignorés) ;
+#       rss = flux exploitable directement ; html = extraction sur la page ; rss-js = RSS ok mais pages JS.
 
 - nom: Mairie de Montrichard Val de Cher
   commune: Montrichard Val de Cher
@@ -8,9 +9,10 @@
   rss: https://www.montrichardvaldecher.com/agenda/feed/
   ical: https://www.montrichardvaldecher.com/agenda/liste/?ical=1
   type: mairie
-  mode: rss
+  mode: ical
   priorite: 1
   remarque: Meilleure source du secteur (The Events Calendar). Brocantes, ciné plein air, bal des pompiers.
+    Le rss (mêmes items) est gardé en repli documentaire mais n'est pas lu tant que 'ical' existe.
 
 - nom: Mairie de Faverolles-sur-Cher
   commune: Faverolles-sur-Cher

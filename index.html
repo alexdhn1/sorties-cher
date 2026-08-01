@@ -97,6 +97,8 @@
   .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
   .tag { display: inline-block; font-size: .75rem; background: var(--chip); color: var(--muted); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
   .tag.urgent { background: var(--accent); color: var(--bg); font-weight: 600; }
+  /* provenance (mairie, facebook, ajout perso) : visuellement distincte des tags de contenu */
+  .tag.src { background: transparent; border: 1px dashed var(--muted); }
 
   .day-h { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent-soft); }
   .day-h h2 { font-size: .98rem; text-transform: capitalize; }
@@ -145,7 +147,7 @@
   <main id="content"></main>
 
   <footer>
-    Données <a href="https://www.datatourisme.fr" style="color:inherit">DATAtourisme</a> — horaires à vérifier sur le site officiel avant de partir.
+    Données <a href="https://www.datatourisme.fr" style="color:inherit">DATAtourisme</a> et agendas des mairies de la vallée du Cher — horaires à vérifier sur le site officiel avant de partir.
   </footer>
 </div>
 
@@ -217,15 +219,31 @@ function card(e, opts = {}) {
   if (e.reserv) tags.push(["sur réservation", ""]);
   if (e.enfants) tags.push(["enfants", ""]);
   if (!opts.noTempo && TEMPO_TAG[e.temporalite]) tags.push([TEMPO_TAG[e.temporalite], ""]);
+  // provenance en dernier, coercition str (un source non-string ne doit pas planter le rendu)
+  const src = e.source == null ? "" : String(e.source);
+  if (src) {
+    const pfx = src.split(":")[0];
+    tags.push([{mairie: "mairie", facebook: "facebook", manuel: "ajout perso"}[pfx] || pfx, "src"]);
+  }
   const jours = (e.jours || []).length && e.temporalite === "recurrent"
     ? ` · ${e.jours.map(j => JN[j]).join(", ")}` : "";
-  let pinfo = "";
-  if (e.periodes) {
-    const mono = e.periodes.every(p => !p.au || p.au === p.du);
-    pinfo = mono ? ` · +${e.periodes.length - 1} autres dates` : ` (+${e.periodes.length - 1} autres périodes)`;
+  let dates = "";
+  if (e.du && e.temporalite !== "toujours" && (e.periodes || e.temporalite !== "recurrent")) {
+    let dtxt = fmtDates(e), pinfo = "";
+    if (e.periodes) {
+      const mono = e.periodes.every(p => !p.au || p.au === p.du);
+      if (mono) {
+        // dates ponctuelles multiples : afficher la PROCHAINE, pas l'enveloppe (trompeuse)
+        const t = todayISO();
+        const next = e.periodes.map(p => p.du).filter(d => d >= t).sort()[0] || e.du;
+        dtxt = FMT_WD.format(new Date(next + "T12:00:00"));
+        pinfo = ` · +${e.periodes.length - 1} autres dates`;
+      } else {
+        pinfo = ` (+${e.periodes.length - 1} autres périodes)`;
+      }
+    }
+    dates = " · " + dtxt + pinfo;
   }
-  const dates = e.du && e.temporalite !== "toujours" && (e.periodes || e.temporalite !== "recurrent")
-    ? " · " + fmtDates(e) + pinfo : "";
   const href = e.url || maps;  // sans site officiel, la carte ouvre l'itinéraire : tout reste tappable
   const titre = `<a class="stretch" href="${esc(href)}" target="_blank" rel="noopener">${esc(e.label || "")}</a>`;
   return `<div class="card">
@@ -493,7 +511,7 @@ function renderAgenda(pool) {
   const recsSans = pool.filter(e => e.temporalite === "recurrent" && !e.periodes && !(e.jours || []).length);
   const saison = pool.filter(e => e.temporalite === "saisonnier" && !e.periodes)
     .sort((a, b) => ((a.au || "9999") < (b.au || "9999") ? -1 : 1));  // ce qui ferme le plus tôt d'abord
-  const horizon = (DATA.window_weeks || 3) * 7;
+  const horizon = DATA.horizon_jours || (DATA.window_weeks || 3) * 7;
   const fmt = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const DAYCAP = 12, DPP = 7;  // 12 cartes max par jour, 7 jours par page : le DOM reste léger
 
@@ -536,7 +554,7 @@ function renderAgenda(pool) {
       recsSans.map(e => card(e, {noTempo: 1, tag: "jour à vérifier"})).join("") + `</details>`;
   }
   html += `<div class="empty">Les lieux ouverts toute l’année n’apparaissent pas dans l’agenda — voir la vue Liste.</div>`;
-  return {html, status: `${totalDates} date${totalDates > 1 ? "s" : ""} sur ${DATA.window_weeks || 3} semaines · ${RING_LABEL[state.ring]}`};
+  return {html, status: `${totalDates} date${totalDates > 1 ? "s" : ""} sur ${Math.ceil(horizon / 7)} semaine${horizon > 7 ? "s" : ""} · ${RING_LABEL[state.ring]}`};
 }
 
 // recherche active : résultats à plat, pas de sections ni d'accordéons fermés
