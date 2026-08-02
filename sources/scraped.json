@@ -1,0 +1,136 @@
+[
+  {
+    "label": "Visite du Moulin des Aigremonts",
+    "ville": "Bléré",
+    "du": "2026-08-02",
+    "desc": "Ouverture du moulin les premiers dimanches de chaque mois et les jours fériés.",
+    "url": "https://www.ville-blere.fr/evenements/visite-du-moulin-des-aigremonts/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Guinguette du 02/08",
+    "ville": "Bléré",
+    "du": "2026-08-02",
+    "desc": "Guinguette avec l'orchestre Olivier Plisson.",
+    "url": "https://www.ville-blere.fr/evenements/guinguette-du-02-08/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Concerts du lundi à Chenonceaux",
+    "ville": "Chenonceaux",
+    "du": "2026-08-03",
+    "au": "2026-08-31",
+    "desc": "Tous les lundis d'août, des groupes de musique animent la soirée.",
+    "url": "https://www.ville-blere.fr/evenements/concert-a-chenonceaux/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Concert",
+    "ville": "Pouillé",
+    "du": "2026-08-07",
+    "h": "21h",
+    "desc": "Concert à Pouillé.",
+    "url": "https://mairie-pouille-loiretcher.fr/concert-7/",
+    "source": "mairie:Pouillé"
+  },
+  {
+    "label": "Soirée d'été – duo E & A",
+    "ville": "Bléré",
+    "du": "2026-08-08",
+    "desc": "Soirée musicale avec le duo chanteuse-guitariste E & A.",
+    "url": "https://www.ville-blere.fr/evenements/soiree-dete-16-08/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Guinguette du 09/08",
+    "ville": "Bléré",
+    "du": "2026-08-09",
+    "desc": "Guinguette avec le duo Vivanis.",
+    "url": "https://www.ville-blere.fr/evenements/guinguette-du-09-08/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Bal du 15 août",
+    "ville": "Bléré",
+    "du": "2026-08-15",
+    "desc": "Bal avec Michel Ville.",
+    "url": "https://www.ville-blere.fr/evenements/bal-du-15-aout/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Concours de pêche",
+    "ville": "Pouillé",
+    "du": "2026-08-15",
+    "desc": "Concours de pêche à Pouillé.",
+    "url": "https://mairie-pouille-loiretcher.fr/concours-de-peche-2/",
+    "source": "mairie:Pouillé"
+  },
+  {
+    "label": "Concours de pêche spécial poisson-chat (AAPPMA)",
+    "ville": "Thésée",
+    "du": "2026-08-15",
+    "h": "9h–11h",
+    "desc": "Concours de pêche de l'AAPPMA au plan d'eau du Gué Bertin.",
+    "url": "https://www.communedethesee.com/",
+    "source": "mairie:Thésée"
+  },
+  {
+    "label": "Brocante du Comité des Fêtes",
+    "ville": "Faverolles-sur-Cher",
+    "du": "2026-08-16",
+    "desc": "Brocante organisée par le Comité des Fêtes.",
+    "url": "https://www.faverollessurcher.fr/fr/ev/2439153/agenda-1581",
+    "source": "mairie:Faverolles-sur-Cher"
+  },
+  {
+    "label": "Pique-nique et cinéma plein air « Mia et le lion blanc »",
+    "ville": "Thésée",
+    "du": "2026-08-21",
+    "h": "20h (film à 22h)",
+    "desc": "Pique-nique tiré du sac sur le site des Mazelles, puis projection en plein air à 22h.",
+    "url": "https://www.communedethesee.com/",
+    "source": "mairie:Thésée"
+  },
+  {
+    "label": "Clôture de la saison estivale",
+    "ville": "Bléré",
+    "du": "2026-08-30",
+    "desc": "Fête et musique : spectacles reprogrammés suite aux annulations dues aux fortes chaleurs.",
+    "url": "https://www.ville-blere.fr/evenements/cloture-de-la-saison-estivale/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Jeux intervillages",
+    "ville": "Rilly-sur-Loire",
+    "du": "2026-09-06",
+    "desc": "Jeux intervillages à Rilly-sur-Loire ; Vallières-les-Grandes cherche des participants pour représenter la commune.",
+    "url": "https://app.panneaupocket.com/ville/25515937-vallieres-les-grandes-41400",
+    "source": "mairie:Vallières-les-Grandes"
+  },
+  {
+    "label": "Randonnée VTT",
+    "ville": "Pouillé",
+    "du": "2026-09-13",
+    "desc": "Randonnée VTT à Pouillé.",
+    "url": "https://mairie-pouille-loiretcher.fr/randonnee-vtt/",
+    "source": "mairie:Pouillé"
+  },
+  {
+    "label": "Ciné-Off",
+    "ville": "Bléré",
+    "du": "2026-09-15",
+    "h": "14h30 et 20h",
+    "desc": "Séance de 14h30 : « De la Comédie française » ; séance de 20h : « La bataille de Gaulle : l'âge de fer ».",
+    "url": "https://www.ville-blere.fr/evenements/cine-off/",
+    "source": "mairie:Bléré"
+  },
+  {
+    "label": "Journées Européennes du Patrimoine",
+    "ville": "Bléré",
+    "du": "2026-09-19",
+    "au": "2026-09-20",
+    "desc": "43e édition des Journées Européennes du Patrimoine : découverte du patrimoine de la ville.",
+    "url": "https://www.ville-blere.fr/evenements/journees-europeennes-du-patrimoine/",
+    "source": "mairie:Bléré"
+  }
+]
