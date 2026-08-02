@@ -1,8 +1,0 @@
-# Pages Facebook à consulter chaque semaine via Claude in Chrome (compte d'Alex connecté).
-# EN ATTENTE : Alex doit fournir les 3-4 pages (nom + URL). Format :
-# - nom: Comité des fêtes de Saint-Georges-sur-Cher
-#   url: https://www.facebook.com/...
-#   remarque: brocantes et fêtes de village
-#
-# Règles : lecture seule, uniquement les pages listées ici, pendant une session où
-# l'extension Chrome est connectée. Événements extraits → sources/scraped.json (source: facebook).
